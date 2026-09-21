@@ -1,0 +1,47 @@
+# Android / Gradle
+.gradle/
+.kotlin/
+**/build/
+local.properties
+*.iml
+.idea/
+.externalNativeBuild/
+.cxx/
+captures/
+
+# Node / web tooling
+/web/
+**/node_modules/
+web/.next/
+web/.vinext/
+web/.wrangler/
+web/dist/
+web/out/
+web/.openai/
+web/*.tsbuildinfo
+web/.dev-server*.log
+web/vocab-site*.tar.gz
+server/.env
+
+# Secrets and signing material
+.env
+.env.*
+!.env.example
+*.jks
+*.keystore
+*.p12
+*.pem
+*.key
+debug.keystore
+
+# Generated packages and local artifacts
+*.apk
+*.aab
+artifacts/
+.codex-remote-attachments/
+metadata.json
+
+# Operating system files
+.DS_Store
+Thumbs.db
+desktop.ini
