@@ -21,7 +21,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
@@ -87,6 +87,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
@@ -105,6 +106,7 @@ import com.example.data.assistant.AssistantMessage
 import com.example.data.assistant.AssistantPendingAction
 import com.example.viewmodel.AssistantSendOutcome
 import com.example.data.entity.Deck
+import com.example.ui.components.rememberResponsiveLayout
 import org.json.JSONArray
 import org.json.JSONObject
 import androidx.core.content.FileProvider
@@ -146,6 +148,10 @@ fun AiAssistantScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val responsive = rememberResponsiveLayout()
+    val density = LocalDensity.current
+    val useLandscapeInputOverlay = responsive.isLandscape &&
+        WindowInsets.ime.getBottom(density) > 0
     var input by remember { mutableStateOf("") }
     val context = LocalContext.current
     var attachments by remember { mutableStateOf<List<Uri>>(emptyList()) }
@@ -449,7 +455,7 @@ fun AiAssistantScreen(
                         }
                     }
                     LazyColumn(
-                        modifier = Modifier.height(300.dp),
+                        modifier = Modifier.heightIn(max = responsive.dialogContentMaxHeight),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         items(conversations, key = { it.id }) { conversation ->
@@ -497,7 +503,7 @@ fun AiAssistantScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            if (!useLandscapeInputOverlay) TopAppBar(
                 title = {
                     Column {
                         Text("Vocab AI", fontWeight = FontWeight.Bold)
@@ -548,44 +554,46 @@ fun AiAssistantScreen(
                 .padding(paddingValues)
                 .padding(horizontal = 12.dp)
         ) {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                if (messages.isEmpty()) {
-                    item {
-                        AssistantWelcome(
-                            apiConfigured = apiConfigured,
-                            onSuggestion = { onSend(it, emptyList()) },
-                            onOpenSettings = onOpenSettings
+            if (!useLandscapeInputOverlay) {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    if (messages.isEmpty()) {
+                        item {
+                            AssistantWelcome(
+                                apiConfigured = apiConfigured,
+                                onSuggestion = { onSend(it, emptyList()) },
+                                onOpenSettings = onOpenSettings
+                            )
+                        }
+                    }
+                    itemsIndexed(messages, key = { index, message -> "${message.id}:$index" }) { _, message ->
+                        AssistantMessageBubble(
+                            message = message,
+                            onQuizCompleted = onQuizCompleted,
+                            onQuizRestart = onQuizRestart,
+                            onOpenQuiz = { activeQuizMessageId = message.id }
                         )
                     }
-                }
-                itemsIndexed(messages, key = { index, message -> "${message.id}:$index" }) { _, message ->
-                    AssistantMessageBubble(
-                        message = message,
-                        onQuizCompleted = onQuizCompleted,
-                        onQuizRestart = onQuizRestart,
-                        onOpenQuiz = { activeQuizMessageId = message.id }
-                    )
-                }
-                if (busy) {
-                    item {
-                        AssistantTypingIndicator(status)
+                    if (busy) {
+                        item {
+                            AssistantTypingIndicator(status)
+                        }
                     }
-                }
-                pendingAction?.let { action ->
-                    item {
-                        AssistantActionCard(action, onConfirmAction, onCancelAction)
+                    pendingAction?.let { action ->
+                        item {
+                            AssistantActionCard(action, onConfirmAction, onCancelAction)
+                        }
                     }
-                }
-                undoAction?.let { action ->
-                    item {
-                        OutlinedButton(onClick = onUndoAction, enabled = !busy) {
-                            Icon(Icons.Default.History, contentDescription = null)
-                            Text(action.title)
+                    undoAction?.let { action ->
+                        item {
+                            OutlinedButton(onClick = onUndoAction, enabled = !busy) {
+                                Icon(Icons.Default.History, contentDescription = null)
+                                Text(action.title)
+                            }
                         }
                     }
                 }
@@ -594,11 +602,10 @@ fun AiAssistantScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .imePadding()
                     .navigationBarsPadding(),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                if (attachments.isNotEmpty()) {
+                if (!useLandscapeInputOverlay && attachments.isNotEmpty()) {
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -628,7 +635,7 @@ fun AiAssistantScreen(
                         }
                     }
                 }
-                Surface(
+                if (!useLandscapeInputOverlay) Surface(
                     onClick = { showScopeSelector = true },
                     shape = RoundedCornerShape(12.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant,
@@ -679,7 +686,7 @@ fun AiAssistantScreen(
                         keyboardActions = KeyboardActions(onSend = { submit() }),
                         modifier = Modifier
                             .weight(1f)
-                            .heightIn(min = 56.dp, max = 84.dp)
+                            .heightIn(min = 56.dp, max = if (responsive.isLargeText) 120.dp else 84.dp)
                             .testTag("assistant_input")
                     )
                     Surface(

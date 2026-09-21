@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -22,6 +23,8 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import com.example.ui.components.rememberResponsiveLayout
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 @Composable
@@ -35,6 +38,10 @@ fun MainScreen(
     showBottomNavigation: Boolean = true,
     modifier: Modifier = Modifier
 ) {
+    val responsive = rememberResponsiveLayout()
+    val showNavigationLabels = !responsive.isLandscape &&
+        !responsive.isSmallWidth &&
+        !responsive.isLargeText
     val pagerState = rememberPagerState(
         initialPage = currentTab,
         pageCount = { 4 }
@@ -58,14 +65,18 @@ fun MainScreen(
         bottomBar = {
             if (showBottomNavigation) NavigationBar(
                 containerColor = MaterialTheme.colorScheme.surface,
-                contentColor = MaterialTheme.colorScheme.onSurface
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.height(if (showNavigationLabels) 80.dp else 64.dp)
             ) {
                 // Tab 0: 主畫面
                 NavigationBarItem(
                     selected = currentTab == 0,
                     onClick = { onTabSelected(0) },
                     icon = { Icon(imageVector = Icons.Default.Home, contentDescription = "主畫面") },
-                    label = { Text("主畫面", fontWeight = if (currentTab == 0) FontWeight.Bold else FontWeight.Normal) },
+                    label = if (showNavigationLabels) {
+                        { Text("主畫面", fontWeight = if (currentTab == 0) FontWeight.Bold else FontWeight.Normal) }
+                    } else null,
+                    alwaysShowLabel = showNavigationLabels,
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = MaterialTheme.colorScheme.primary,
                         selectedTextColor = MaterialTheme.colorScheme.primary,
@@ -79,7 +90,10 @@ fun MainScreen(
                     selected = currentTab == 1,
                     onClick = { onTabSelected(1) },
                     icon = { Icon(imageVector = Icons.Default.Folder, contentDescription = "資料夾") },
-                    label = { Text("資料夾", fontWeight = if (currentTab == 1) FontWeight.Bold else FontWeight.Normal) },
+                    label = if (showNavigationLabels) {
+                        { Text("資料夾", fontWeight = if (currentTab == 1) FontWeight.Bold else FontWeight.Normal) }
+                    } else null,
+                    alwaysShowLabel = showNavigationLabels,
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = MaterialTheme.colorScheme.primary,
                         selectedTextColor = MaterialTheme.colorScheme.primary,
@@ -93,7 +107,10 @@ fun MainScreen(
                     selected = currentTab == 2,
                     onClick = { onTabSelected(2) },
                     icon = { Icon(imageVector = Icons.Default.Style, contentDescription = "學習") },
-                    label = { Text("學習", fontWeight = if (currentTab == 2) FontWeight.Bold else FontWeight.Normal) },
+                    label = if (showNavigationLabels) {
+                        { Text("學習", fontWeight = if (currentTab == 2) FontWeight.Bold else FontWeight.Normal) }
+                    } else null,
+                    alwaysShowLabel = showNavigationLabels,
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = MaterialTheme.colorScheme.primary,
                         selectedTextColor = MaterialTheme.colorScheme.primary,
@@ -107,7 +124,10 @@ fun MainScreen(
                     selected = currentTab == 3,
                     onClick = { onTabSelected(3) },
                     icon = { Icon(imageVector = Icons.Default.Extension, contentDescription = "測驗") },
-                    label = { Text("測驗", fontWeight = if (currentTab == 3) FontWeight.Bold else FontWeight.Normal) },
+                    label = if (showNavigationLabels) {
+                        { Text("測驗", fontWeight = if (currentTab == 3) FontWeight.Bold else FontWeight.Normal) }
+                    } else null,
+                    alwaysShowLabel = showNavigationLabels,
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = MaterialTheme.colorScheme.primary,
                         selectedTextColor = MaterialTheme.colorScheme.primary,

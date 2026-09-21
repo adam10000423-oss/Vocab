@@ -1,6 +1,8 @@
 package com.example.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -60,6 +62,7 @@ import com.example.data.learning.LearningHistoryEntry
 import com.example.data.learning.LearningRound
 import com.example.data.learning.LearningSessionStore
 import com.example.ui.components.FlipCard
+import com.example.ui.components.rememberResponsiveLayout
 import kotlinx.coroutines.delay
 
 private enum class LearningStartChoice {
@@ -84,6 +87,7 @@ fun FlashcardReviewScreen(
     onOpenQuizGames: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    val responsive = rememberResponsiveLayout()
     var isFlipped by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val sessionStore = remember(context) { LearningSessionStore(context) }
@@ -305,7 +309,11 @@ fun FlashcardReviewScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(horizontal = 20.dp, vertical = 12.dp),
+                .padding(horizontal = responsive.horizontalPadding, vertical = if (responsive.isConstrained) 6.dp else 12.dp)
+                .then(
+                    if (responsive.isLandscape) Modifier.verticalScroll(rememberScrollState())
+                    else Modifier
+                ),
             verticalArrangement = Arrangement.SpaceBetween,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -345,7 +353,7 @@ fun FlashcardReviewScreen(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(if (responsive.isConstrained) 8.dp else 16.dp))
 
                 // 3D Flip Flashcard with Swipe Gestures
                 FlipCard(
@@ -360,10 +368,10 @@ fun FlashcardReviewScreen(
                     onSwipeRight = {
                         answerCurrent(true)
                     },
-                    modifier = Modifier.weight(1f)
+                    modifier = if (responsive.isLandscape) Modifier.fillMaxWidth() else Modifier.weight(1f)
                 )
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(if (responsive.isConstrained) 8.dp else 20.dp))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -384,7 +392,7 @@ fun FlashcardReviewScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(if (responsive.isConstrained) 4.dp else 12.dp))
             } else {
                 // Session Complete View
                 Box(

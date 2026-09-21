@@ -72,6 +72,7 @@ import com.example.data.dictionary.DictionaryEntry
 import com.example.data.entity.Deck
 import com.example.data.entity.Flashcard
 import com.example.ui.components.CalmEmptyState
+import com.example.ui.components.rememberResponsiveLayout
 import com.example.util.OcrWordParser
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -115,6 +116,7 @@ fun AddEditCardScreen(
     aiRequiresConfirmation: Boolean = true,
     modifier: Modifier = Modifier
 ) {
+    val responsive = rememberResponsiveLayout()
     val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -442,8 +444,10 @@ fun AddEditCardScreen(
                         } else {
                             Icon(Icons.Default.AutoAwesome, contentDescription = null)
                         }
-                        Spacer(Modifier.width(4.dp))
-                        Text("AI 一鍵補齊", fontWeight = FontWeight.Bold)
+                        if (!responsive.isConstrained) {
+                            Spacer(Modifier.width(4.dp))
+                            Text("AI 一鍵補齊", fontWeight = FontWeight.Bold)
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)

@@ -5,6 +5,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -46,6 +48,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -63,6 +66,8 @@ fun FlipCard(
     onSwipeRight: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    val responsive = rememberResponsiveLayout()
+    val contentPadding = if (responsive.isConstrained) 16.dp else 24.dp
     var offsetX by remember(card.id) { mutableFloatStateOf(0f) }
     val animatedOffsetX by animateFloatAsState(
         targetValue = offsetX,
@@ -100,7 +105,7 @@ fun FlipCard(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(440.dp)
+                .height(responsive.flashcardHeight)
                 .offset { IntOffset(animatedOffsetX.roundToInt(), 0) }
                 .testTag("flashcard_flip_card")
                 .graphicsLayer {
@@ -120,7 +125,7 @@ fun FlipCard(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(24.dp)
+                        .padding(contentPadding)
                 ) {
                     // Deck Category Tag / Mastered Badge
                     Row(
@@ -163,10 +168,12 @@ fun FlipCard(
                             text = card.word,
                             style = MaterialTheme.typography.headlineLarge.copy(
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 36.sp
+                                fontSize = if (responsive.isConstrained) 28.sp else 36.sp
                             ),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
+                            textAlign = TextAlign.Center,
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis
                         )
 
                         if (card.phonetic.isNotBlank()) {
@@ -221,11 +228,13 @@ fun FlipCard(
                     modifier = Modifier
                         .fillMaxSize()
                         .graphicsLayer { rotationY = 180f }
-                        .padding(24.dp)
+                        .padding(contentPadding)
                 ) {
                     Column(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.SpaceBetween
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         // Header on Back
                         Row(
@@ -305,7 +314,7 @@ fun FlipCard(
                             )
                         }
 
-                        Spacer(modifier = Modifier.weight(1f))
+                        Spacer(modifier = Modifier.height(12.dp))
 
                         Text(
                             text = "點一下回正面",

@@ -6,6 +6,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -83,10 +85,11 @@ import com.example.data.entity.Deck
 import com.example.data.entity.Flashcard
 import com.example.ui.components.AddFolderDialog
 import com.example.ui.components.CalmEmptyState
+import com.example.ui.components.rememberResponsiveLayout
 import com.example.util.OcrWordParser
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun CardListScreen(
     cards: List<Flashcard>,
@@ -117,6 +120,7 @@ fun CardListScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val responsive = rememberResponsiveLayout()
     val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -552,12 +556,12 @@ fun CardListScreen(
                 Button(
                     onClick = { onStartReview(selectedScopeDeckIds) },
                     shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.weight(1f).height(46.dp).testTag("folder_start_review_button")
+                    modifier = Modifier.weight(1f).heightIn(min = 46.dp).testTag("folder_start_review_button")
                 ) { Text("學習", fontWeight = FontWeight.Bold) }
                 OutlinedButton(
                     onClick = { onOpenQuizGames(selectedScopeDeckIds) },
                     shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.weight(1f).height(46.dp).testTag("folder_open_quiz_button")
+                    modifier = Modifier.weight(1f).heightIn(min = 46.dp).testTag("folder_open_quiz_button")
                 ) { Text("測驗", fontWeight = FontWeight.Bold) }
             }
 
@@ -593,9 +597,10 @@ fun CardListScreen(
                             color = MaterialTheme.colorScheme.onErrorContainer
                         )
 
-                        Row(
+                        FlowRow(
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                            maxItemsInEachRow = if (responsive.isSmallWidth || responsive.isLargeText) 2 else 4,
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             TextButton(
@@ -836,7 +841,7 @@ private fun CompactSelector(
             shape = RoundedCornerShape(12.dp),
             color = MaterialTheme.colorScheme.surfaceVariant,
             contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.fillMaxWidth().height(44.dp)
+            modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp)
         ) {
             Row(
                 modifier = Modifier.padding(horizontal = 12.dp),

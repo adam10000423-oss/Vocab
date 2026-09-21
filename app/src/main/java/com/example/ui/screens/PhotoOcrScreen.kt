@@ -9,11 +9,14 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -65,6 +68,7 @@ import com.example.util.AiImagePreprocessor
 import com.example.util.DocumentParser
 import com.example.util.OcrCardCandidate
 import com.example.util.OcrWordParser
+import com.example.ui.components.rememberResponsiveLayout
 import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
@@ -79,7 +83,7 @@ import androidx.core.content.FileProvider
 import kotlinx.coroutines.launch
 import java.io.File
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun PhotoOcrScreen(
     decks: List<Deck>,
@@ -92,6 +96,7 @@ fun PhotoOcrScreen(
     pdfPageLimit: Int = 20,
     modifier: Modifier = Modifier
 ) {
+    val responsive = rememberResponsiveLayout()
     val context = LocalContext.current
     var rawInputText by remember { mutableStateOf("") }
     var selectedDeckId by remember(decks, initialDeckId) {
@@ -276,11 +281,11 @@ fun PhotoOcrScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(responsive.horizontalPadding),
+            verticalArrangement = Arrangement.spacedBy(if (responsive.isConstrained) 8.dp else 16.dp)
         ) {
             // Instructions Banner
-            Card(
+            if (!responsive.isLandscape) Card(
                 shape = RoundedCornerShape(18.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)),
                 modifier = Modifier.fillMaxWidth()
@@ -374,7 +379,7 @@ fun PhotoOcrScreen(
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier
                         .weight(1f)
-                        .height(48.dp)
+                        .heightIn(min = 48.dp)
                         .testTag("take_photo_ocr_button")
                 ) {
                     Icon(Icons.Default.CameraAlt, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -410,7 +415,7 @@ fun PhotoOcrScreen(
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier
                         .weight(1f)
-                        .height(48.dp)
+                        .heightIn(min = 48.dp)
                         .testTag("document_scanner_button")
                 ) {
                     Icon(Icons.Default.DocumentScanner, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -429,7 +434,7 @@ fun PhotoOcrScreen(
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier
                         .weight(1f)
-                        .height(48.dp)
+                        .heightIn(min = 48.dp)
                         .testTag("select_photo_ocr_button")
                 ) {
                     Icon(Icons.Default.PhotoLibrary, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -455,7 +460,7 @@ fun PhotoOcrScreen(
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier
                         .weight(1f)
-                        .height(48.dp)
+                        .heightIn(min = 48.dp)
                         .testTag("select_file_doc_button")
                 ) {
                     Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -511,17 +516,21 @@ fun PhotoOcrScreen(
             // Extracted Candidates Table List
             if (localCandidates.isNotEmpty()) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(
+                    FlowRow(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Text(
                             text = "找到 ${localCandidates.size} 張",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            modifier = Modifier.weight(1f)
                         )
 
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
                             // AI Auto Fill Button
                             if (aiAvailable) Button(
                                 onClick = {

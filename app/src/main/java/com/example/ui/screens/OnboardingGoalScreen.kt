@@ -6,9 +6,13 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -44,11 +48,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.example.ui.components.rememberResponsiveLayout
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun OnboardingGoalScreen(
     onComplete: (dailyGoal: Int, remindersEnabled: Boolean, reminderHour: Int) -> Unit
 ) {
+    val responsive = rememberResponsiveLayout()
     val context = LocalContext.current
     var goal by remember { mutableIntStateOf(20) }
     var remindersEnabled by remember { mutableStateOf(true) }
@@ -66,7 +73,7 @@ fun OnboardingGoalScreen(
                     listOf(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.background)
                 )
             )
-            .padding(20.dp),
+            .padding(responsive.horizontalPadding),
         contentAlignment = Alignment.Center
     ) {
         Card(
@@ -75,7 +82,9 @@ fun OnboardingGoalScreen(
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(
-                modifier = Modifier.padding(24.dp),
+                modifier = Modifier
+                    .padding(if (responsive.isConstrained) 16.dp else 24.dp)
+                    .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(18.dp)
             ) {
@@ -105,9 +114,11 @@ fun OnboardingGoalScreen(
                     textAlign = TextAlign.Center
                 )
 
-                Row(
+                FlowRow(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    maxItemsInEachRow = if (responsive.isSmallWidth || responsive.isLargeText) 2 else 4
                 ) {
                     listOf(10, 20, 30, 50).forEach { value ->
                         FilterChip(

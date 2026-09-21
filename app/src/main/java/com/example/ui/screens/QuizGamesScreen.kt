@@ -847,7 +847,7 @@ private fun IndependentQuizView(
                 }
                 Text("排列結果・點單字可放回下方", fontWeight = FontWeight.Bold)
                 Surface(
-                    modifier = Modifier.fillMaxWidth().height(132.dp),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 112.dp, max = 180.dp),
                     shape = RoundedCornerShape(16.dp),
                     color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.48f)
                 ) {
@@ -879,7 +879,7 @@ private fun IndependentQuizView(
 
                 Text("可選單字", fontWeight = FontWeight.Bold)
                 Surface(
-                    modifier = Modifier.fillMaxWidth().height(150.dp),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 130.dp, max = 210.dp),
                     shape = RoundedCornerShape(16.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f)
                 ) {

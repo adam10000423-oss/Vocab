@@ -473,7 +473,7 @@ fun DashboardScreen(
                                 ),
                                 modifier = Modifier
                                     .width(180.dp)
-                                    .height(95.dp)
+                                    .heightIn(min = 95.dp)
                             ) {
                                 Column(
                                     modifier = Modifier

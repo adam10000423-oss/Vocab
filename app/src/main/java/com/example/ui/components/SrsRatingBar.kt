@@ -2,10 +2,12 @@ package com.example.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -24,6 +26,7 @@ import androidx.compose.ui.unit.sp
 import com.example.data.entity.Flashcard
 import com.example.data.srs.SrsCalculator
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SrsRatingBar(
     card: Flashcard,
@@ -31,11 +34,14 @@ fun SrsRatingBar(
     advancedMode: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    Row(
+    val responsive = rememberResponsiveLayout()
+    FlowRow(
         modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        maxItemsInEachRow = if (advancedMode && responsive.isConstrained) 2 else 4
     ) {
         // Rating 1: Not Mastered
         SrsRatingButton(
@@ -92,7 +98,7 @@ private fun SrsRatingButton(
             contentColor = buttonContentColor
         ),
         shape = RoundedCornerShape(16.dp),
-        modifier = modifier.height(58.dp)
+        modifier = modifier.heightIn(min = 58.dp)
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
