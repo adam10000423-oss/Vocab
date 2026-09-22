@@ -37,7 +37,6 @@ import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.DriveFileMove
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
@@ -86,6 +85,7 @@ import com.example.data.entity.Flashcard
 import com.example.ui.components.AddFolderDialog
 import com.example.ui.components.CalmEmptyState
 import com.example.ui.components.rememberResponsiveLayout
+import com.example.ui.components.ReorderDragHandle
 import com.example.util.OcrWordParser
 import kotlinx.coroutines.launch
 
@@ -100,6 +100,7 @@ fun CardListScreen(
     onDeleteCard: (Flashcard) -> Unit,
     onDeleteCards: (List<Flashcard>) -> Unit = {},
     onMoveCard: (Flashcard, Int) -> Unit = { _, _ -> },
+    onReorderCards: (Long, List<Long>) -> Unit = { _, _ -> },
     onMoveCards: (List<Flashcard>, Long, (Int, Int) -> Unit) -> Unit = { _, _, done -> done(0, 0) },
     onCreateFolderAndMoveCards: (
         String,
@@ -176,6 +177,17 @@ fun CardListScreen(
         }
 
         matchesSearch && matchesTab
+    }
+    val dragReorderEnabled = selectedDeckId != null &&
+        selectedTab == 0 &&
+        searchQuery.isBlank() &&
+        !isMultiSelectMode
+    val sourceCardIds = if (dragReorderEnabled) finalFilteredCards.map { it.id } else emptyList()
+    var displayedCardIds by remember(sourceCardIds) { mutableStateOf(sourceCardIds) }
+    val displayedCards = if (dragReorderEnabled) {
+        displayedCardIds.mapNotNull { id -> finalFilteredCards.firstOrNull { it.id == id } }
+    } else {
+        finalFilteredCards
     }
 
     // Dialog for Choosing Add Card Method
@@ -664,12 +676,8 @@ fun CardListScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    itemsIndexed(finalFilteredCards, key = { _, card -> card.id }) { cardIndex, card ->
+                    itemsIndexed(displayedCards, key = { _, card -> card.id }) { _, card ->
                         val isSelected = selectedCards.contains(card)
-                        val canReorder = selectedDeckId != null &&
-                            selectedTab == 0 &&
-                            searchQuery.isBlank() &&
-                            !isMultiSelectMode
                         CardListItem(
                             card = card,
                             isMultiSelectMode = isMultiSelectMode,
@@ -681,11 +689,27 @@ fun CardListScreen(
                             onDeleteCard = { onDeleteCard(card) },
                             onEditCard = { onEditCard(card) },
                             onSpeak = { onSpeak(card.word) },
-                            showReorder = canReorder,
-                            canMoveUp = cardIndex > 0,
-                            canMoveDown = cardIndex in 0 until finalFilteredCards.lastIndex,
-                            onMoveUp = { onMoveCard(card, -1) },
-                            onMoveDown = { onMoveCard(card, 1) }
+                            showReorder = dragReorderEnabled,
+                            onMoveOneStep = { direction ->
+                                val fromIndex = displayedCardIds.indexOf(card.id)
+                                val targetIndex = fromIndex + direction
+                                if (fromIndex < 0 || targetIndex !in displayedCardIds.indices) {
+                                    false
+                                } else {
+                                    displayedCardIds = displayedCardIds.toMutableList().apply {
+                                        val moving = removeAt(fromIndex)
+                                        add(targetIndex, moving)
+                                    }
+                                    true
+                                }
+                            },
+                            onReorderFinished = {
+                                selectedDeckId?.let { deckId ->
+                                    if (displayedCardIds != sourceCardIds) {
+                                        onReorderCards(deckId, displayedCardIds)
+                                    }
+                                }
+                            }
                         )
                     }
                     item {
@@ -708,10 +732,8 @@ private fun CardListItem(
     onEditCard: () -> Unit,
     onSpeak: () -> Unit,
     showReorder: Boolean,
-    canMoveUp: Boolean,
-    canMoveDown: Boolean,
-    onMoveUp: () -> Unit,
-    onMoveDown: () -> Unit
+    onMoveOneStep: (Int) -> Boolean,
+    onReorderFinished: () -> Unit
 ) {
     Card(
         shape = RoundedCornerShape(18.dp),
@@ -793,18 +815,11 @@ private fun CardListItem(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 if (showReorder) {
-                    IconButton(onClick = onMoveUp, enabled = canMoveUp) {
-                        Icon(
-                            imageVector = Icons.Filled.KeyboardArrowUp,
-                            contentDescription = "上移單字卡"
-                        )
-                    }
-                    IconButton(onClick = onMoveDown, enabled = canMoveDown) {
-                        Icon(
-                            imageVector = Icons.Filled.KeyboardArrowDown,
-                            contentDescription = "下移單字卡"
-                        )
-                    }
+                    ReorderDragHandle(
+                        onDragStart = {},
+                        onMoveOneStep = onMoveOneStep,
+                        onDragEnd = onReorderFinished
+                    )
                 }
                 IconButton(onClick = onSpeak) {
                     Icon(imageVector = Icons.AutoMirrored.Filled.VolumeUp, contentDescription = "發音", tint = MaterialTheme.colorScheme.primary)

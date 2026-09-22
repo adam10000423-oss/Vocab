@@ -82,6 +82,25 @@ class VocabularyRepository(
         )
     }
 
+    suspend fun reorderDecks(orderedDeckIds: List<Long>) = database.withTransaction {
+        if (orderedDeckIds.isEmpty()) return@withTransaction
+        val all = deckDao.getAllDecksOnce()
+        val requestedIds = orderedDeckIds.distinct()
+        require(requestedIds.size == orderedDeckIds.size) { "資料夾排序包含重複項目" }
+        val requestedSet = requestedIds.toSet()
+        require(requestedSet.all { id -> all.any { it.id == id } }) { "找不到要排序的資料夾" }
+        val orderedDecks = requestedIds.map { id ->
+            requireNotNull(all.firstOrNull { it.id == id })
+        }
+        var orderedIndex = 0
+        val merged = all.map { deck ->
+            if (deck.id in requestedSet) orderedDecks[orderedIndex++] else deck
+        }
+        deckDao.updateDecks(
+            merged.mapIndexed { index, deck -> deck.copy(sortOrder = index.toLong()) }
+        )
+    }
+
     suspend fun renameCourse(oldName: String, newName: String): Int {
         val oldValue = oldName.trim()
         val newValue = newName.trim()

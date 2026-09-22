@@ -28,8 +28,6 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.LibraryBooks
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Style
 import androidx.compose.material3.AlertDialog
@@ -69,6 +67,7 @@ import com.example.data.entity.Flashcard
 import com.example.ui.components.CalmEmptyState
 import com.example.ui.components.AddFolderDialog
 import com.example.ui.components.EditFolderDialog
+import com.example.ui.components.ReorderDragHandle
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -80,6 +79,7 @@ fun FoldersManagementScreen(
     onDeleteFolder: (Deck) -> Unit,
     onMoveFolder: (Deck, Int) -> Unit = { _, _ -> },
     onMoveFolderGlobally: (Deck, Int) -> Unit = { _, _ -> },
+    onReorderFolders: (List<Long>) -> Unit = {},
     onRenameCourse: (String, String, (Boolean) -> Unit) -> Unit = { _, _, done -> done(false) },
     onOpenCardList: (deckId: Long) -> Unit,
     onJumpToStudy: (deckId: Long) -> Unit,
@@ -102,6 +102,9 @@ fun FoldersManagementScreen(
         if (selectedCourseFilter == null) decks
         else decks.filter { it.category == selectedCourseFilter }
     }
+    val sourceDeckIds = filteredDecks.map { it.id }
+    var displayedDeckIds by remember(sourceDeckIds) { mutableStateOf(sourceDeckIds) }
+    val displayedDecks = displayedDeckIds.mapNotNull { id -> filteredDecks.firstOrNull { it.id == id } }
 
     if (showAddDialog) {
         AddFolderDialog(
@@ -291,14 +294,14 @@ fun FoldersManagementScreen(
                         Text("重新命名課程「$course」")
                     }
                 } ?: Text(
-                    text = "可直接調整全部資料夾的整體順序。",
+                    text = "拖曳卡片右上方把手可調整整體順序。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 8.dp)
                 )
             }
 
-            if (filteredDecks.isEmpty()) {
+            if (displayedDecks.isEmpty()) {
                 item {
                     CalmEmptyState(
                         icon = Icons.Default.Folder,
@@ -307,7 +310,7 @@ fun FoldersManagementScreen(
                     )
                 }
             } else {
-                itemsIndexed(filteredDecks, key = { _, deck -> deck.id }) { deckIndex, deck ->
+                itemsIndexed(displayedDecks, key = { _, deck -> deck.id }) { _, deck ->
                     val deckCards = allCards.filter { it.deckId == deck.id }
                     val totalCardCount = deckCards.size
                     val masteredCount = deckCards.count { it.isMastered }
@@ -363,32 +366,27 @@ fun FoldersManagementScreen(
                                 }
 
                                 Row(horizontalArrangement = Arrangement.spacedBy(0.dp)) {
-                                    IconButton(
-                                        onClick = {
-                                            if (selectedCourseFilter == null) onMoveFolderGlobally(deck, -1)
-                                            else onMoveFolder(deck, -1)
+                                    ReorderDragHandle(
+                                        onDragStart = {},
+                                        onMoveOneStep = { direction ->
+                                            val fromIndex = displayedDeckIds.indexOf(deck.id)
+                                            val targetIndex = fromIndex + direction
+                                            if (fromIndex < 0 || targetIndex !in displayedDeckIds.indices) {
+                                                false
+                                            } else {
+                                                displayedDeckIds = displayedDeckIds.toMutableList().apply {
+                                                    val moving = removeAt(fromIndex)
+                                                    add(targetIndex, moving)
+                                                }
+                                                true
+                                            }
                                         },
-                                        enabled = deckIndex > 0,
-                                        modifier = Modifier.size(36.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.KeyboardArrowUp,
-                                            contentDescription = "上移資料夾"
-                                        )
-                                    }
-                                    IconButton(
-                                        onClick = {
-                                            if (selectedCourseFilter == null) onMoveFolderGlobally(deck, 1)
-                                            else onMoveFolder(deck, 1)
-                                        },
-                                        enabled = deckIndex < filteredDecks.lastIndex,
-                                        modifier = Modifier.size(36.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.KeyboardArrowDown,
-                                            contentDescription = "下移資料夾"
-                                        )
-                                    }
+                                        onDragEnd = {
+                                            if (displayedDeckIds != sourceDeckIds) {
+                                                onReorderFolders(displayedDeckIds)
+                                            }
+                                        }
+                                    )
                                     IconButton(
                                         onClick = { editingDeck = deck },
                                         modifier = Modifier.size(36.dp)

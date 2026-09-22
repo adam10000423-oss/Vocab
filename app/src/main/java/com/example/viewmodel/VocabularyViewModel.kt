@@ -244,6 +244,14 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
         viewModelScope.launch { repository.moveDeckGlobally(deck.id, direction) }
     }
 
+    fun reorderDecks(orderedDeckIds: List<Long>) {
+        viewModelScope.launch { repository.reorderDecks(orderedDeckIds) }
+    }
+
+    fun reorderCards(deckId: Long, orderedCardIds: List<Long>) {
+        viewModelScope.launch { repository.reorderCards(deckId, orderedCardIds) }
+    }
+
     fun renameCourse(oldName: String, newName: String, onComplete: (Boolean) -> Unit = {}) {
         viewModelScope.launch {
             val success = runCatching {

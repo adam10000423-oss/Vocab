@@ -7,6 +7,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,6 +15,8 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -34,6 +37,9 @@ import com.example.ui.screens.ExternalImportScreen
 import com.example.ui.screens.OnboardingGoalScreen
 import com.example.ui.screens.AiAssistantScreen
 import com.example.viewmodel.VocabularyViewModel
+import com.example.util.GitHubUpdateManager
+import com.example.util.UpdateCheckResult
+import kotlinx.coroutines.launch
 
 object Routes {
     const val MAIN = "main"
@@ -89,6 +95,14 @@ fun VocabApp(
     var reviewDeckIds by remember { mutableStateOf<Set<Long>?>(null) }
     var reviewScopeId by remember { mutableStateOf(0L) }
     var quizGameActive by remember { mutableStateOf(false) }
+    var updateAvailable by remember { mutableStateOf(false) }
+    val updateCheckScope = rememberCoroutineScope()
+
+    LifecycleEventEffect(Lifecycle.Event.ON_START) {
+        updateCheckScope.launch {
+            updateAvailable = GitHubUpdateManager.checkForUpdate() is UpdateCheckResult.Available
+        }
+    }
 
     if (!settingsLoaded) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -181,6 +195,7 @@ fun VocabApp(
                         },
                         onOpenCardList = { navController.navigate(Routes.CARD_LIST) },
                         onOpenSettings = { navController.navigate(Routes.SETTINGS) },
+                        updateAvailable = updateAvailable,
                         onOpenExternalImport = { navController.navigate(Routes.EXTERNAL_IMPORT) },
                         onOpenAssistant = {
                             viewModel.openAssistant(selectedDeckId)
@@ -197,6 +212,7 @@ fun VocabApp(
                         onDeleteFolder = viewModel::deleteDeck,
                         onMoveFolder = viewModel::moveDeck,
                         onMoveFolderGlobally = viewModel::moveDeckGlobally,
+                        onReorderFolders = viewModel::reorderDecks,
                         onRenameCourse = viewModel::renameCourse,
                         onOpenCardList = { deckId ->
                             viewModel.selectDeck(deckId)
@@ -389,6 +405,7 @@ fun VocabApp(
                 onDeleteCard = viewModel::deleteCard,
                 onDeleteCards = viewModel::deleteCards,
                 onMoveCard = viewModel::moveCard,
+                onReorderCards = viewModel::reorderCards,
                 onMoveCards = viewModel::moveCards,
                 onCreateFolderAndMoveCards = viewModel::createFolderAndMoveCards,
                 onEditCard = { card ->

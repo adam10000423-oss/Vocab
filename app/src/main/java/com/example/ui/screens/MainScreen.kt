@@ -1,7 +1,6 @@
 package com.example.ui.screens
 
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -23,7 +22,6 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import com.example.ui.components.rememberResponsiveLayout
 import kotlinx.coroutines.flow.distinctUntilChanged
 
@@ -65,8 +63,7 @@ fun MainScreen(
         bottomBar = {
             if (showBottomNavigation) NavigationBar(
                 containerColor = MaterialTheme.colorScheme.surface,
-                contentColor = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.height(if (showNavigationLabels) 80.dp else 64.dp)
+                contentColor = MaterialTheme.colorScheme.onSurface
             ) {
                 // Tab 0: 主畫面
                 NavigationBarItem(

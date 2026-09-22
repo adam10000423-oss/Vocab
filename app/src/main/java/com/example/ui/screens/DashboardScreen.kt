@@ -87,6 +87,7 @@ fun DashboardScreen(
     onOpenQuizGames: (Long?) -> Unit,
     onOpenCardList: () -> Unit,
     onOpenSettings: () -> Unit,
+    updateAvailable: Boolean = false,
     onOpenExternalImport: () -> Unit,
     onOpenAssistant: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -247,11 +248,21 @@ fun DashboardScreen(
                         )
                     }
                     IconButton(onClick = onOpenSettings) {
-                        Icon(
-                            imageVector = Icons.Filled.Settings,
-                            contentDescription = "設定",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Box {
+                            Icon(
+                                imageVector = Icons.Filled.Settings,
+                                contentDescription = "設定",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            if (updateAvailable) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .size(8.dp)
+                                        .background(MaterialTheme.colorScheme.error, CircleShape)
+                                )
+                            }
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
