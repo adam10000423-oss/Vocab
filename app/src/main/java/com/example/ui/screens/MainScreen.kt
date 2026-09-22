@@ -83,7 +83,10 @@ fun MainScreen(
             if (showBottomNavigation) {
                 TopAppBar(
                     expandedHeight = 48.dp,
-                    windowInsets = WindowInsets(0, 0, 0, 0),
+                    // Keep the compact 48 dp app bar, but always reserve the real
+                    // system status-bar inset so the title/actions never overlap
+                    // the clock, signal or battery icons.
+                    windowInsets = TopAppBarDefaults.windowInsets,
                     title = {
                         Crossfade(targetState = pagerState.currentPage, label = "main_page_title") { page ->
                             Text(
