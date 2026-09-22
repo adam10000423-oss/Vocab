@@ -82,20 +82,28 @@ val Typography =
     )
   )
 
-fun scaledTypography(family: FontFamily, scale: Float): Typography =
-  Typography.copy(
-    headlineSmall = Typography.headlineSmall.copy(
-      fontFamily = family,
-      fontSize = Typography.headlineSmall.fontSize * scale,
-      lineHeight = Typography.headlineSmall.lineHeight * scale
-    ),
-    titleLarge = Typography.titleLarge.copy(fontFamily = family, fontSize = Typography.titleLarge.fontSize * scale),
-    titleMedium = Typography.titleMedium.copy(fontFamily = family, fontSize = Typography.titleMedium.fontSize * scale),
-    titleSmall = Typography.titleSmall.copy(fontFamily = family, fontSize = Typography.titleSmall.fontSize * scale),
-    bodyLarge = Typography.bodyLarge.copy(fontFamily = family, fontSize = Typography.bodyLarge.fontSize * scale),
-    bodyMedium = Typography.bodyMedium.copy(fontFamily = family, fontSize = Typography.bodyMedium.fontSize * scale),
-    bodySmall = Typography.bodySmall.copy(fontFamily = family, fontSize = Typography.bodySmall.fontSize * scale),
-    labelLarge = Typography.labelLarge.copy(fontFamily = family, fontSize = Typography.labelLarge.fontSize * scale),
-    labelMedium = Typography.labelMedium.copy(fontFamily = family, fontSize = Typography.labelMedium.fontSize * scale),
-    labelSmall = Typography.labelSmall.copy(fontFamily = family, fontSize = Typography.labelSmall.fontSize * scale)
+fun scaledTypography(family: FontFamily, scale: Float): Typography {
+  val safeScale = scale.coerceIn(0.85f, 1.3f)
+  fun TextStyle.applyAppFont(): TextStyle = copy(
+    fontFamily = family,
+    fontSize = fontSize * safeScale,
+    lineHeight = lineHeight * safeScale
   )
+  return Typography.copy(
+    displayLarge = Typography.displayLarge.applyAppFont(),
+    displayMedium = Typography.displayMedium.applyAppFont(),
+    displaySmall = Typography.displaySmall.applyAppFont(),
+    headlineLarge = Typography.headlineLarge.applyAppFont(),
+    headlineMedium = Typography.headlineMedium.applyAppFont(),
+    headlineSmall = Typography.headlineSmall.applyAppFont(),
+    titleLarge = Typography.titleLarge.applyAppFont(),
+    titleMedium = Typography.titleMedium.applyAppFont(),
+    titleSmall = Typography.titleSmall.applyAppFont(),
+    bodyLarge = Typography.bodyLarge.applyAppFont(),
+    bodyMedium = Typography.bodyMedium.applyAppFont(),
+    bodySmall = Typography.bodySmall.applyAppFont(),
+    labelLarge = Typography.labelLarge.applyAppFont(),
+    labelMedium = Typography.labelMedium.applyAppFont(),
+    labelSmall = Typography.labelSmall.applyAppFont()
+  )
+}

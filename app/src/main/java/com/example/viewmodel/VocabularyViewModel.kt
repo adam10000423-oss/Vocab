@@ -16,6 +16,7 @@ import com.example.data.learning.LearningSessionStore
 import com.example.data.settings.AppSettings
 import com.example.data.settings.ReminderTime
 import com.example.data.settings.SettingsRepository
+import com.example.data.pronunciation.PronunciationPracticeStore
 import com.example.util.DocumentParser
 import com.example.util.AiImagePreprocessor
 import com.example.util.OcrCardCandidate
@@ -84,6 +85,7 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
     private val aiCredentialsStore = AiCredentialsStore(application)
     private val learningSessionStore = LearningSessionStore(application)
     private val assistantChatStore = AssistantChatStore(application)
+    private val pronunciationPracticeStore = PronunciationPracticeStore(application)
     private val cardSaveMutex = Mutex()
     val ttsManager = TtsManager(application)
     val ttsVoices = ttsManager.voices
@@ -106,6 +108,7 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = emptyList()
     )
+    val pronunciationWeakCardIds: StateFlow<Set<Long>> = pronunciationPracticeStore.weakCardIds
 
     val dueCards: StateFlow<List<Flashcard>> = currentTime.flatMapLatest {
         repository.getDueCards(it)
@@ -671,6 +674,7 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
                 aiCredentialsStore.clear()
                 learningSessionStore.clearAll()
                 assistantChatStore.clear()
+                pronunciationPracticeStore.clear()
                 assistantAllMessages.clear()
                 _assistantConversations.value = emptyList()
                 _assistantMessages.value = emptyList()
@@ -688,6 +692,14 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
                 _dataMessage.value = "清空失敗：${it.message ?: "未知錯誤"}"
             }
         }
+    }
+
+    fun recordPronunciationResult(cardId: Long, score: Int) {
+        pronunciationPracticeStore.recordResult(cardId, score.coerceIn(0, 100))
+    }
+
+    fun recordReadingMistake(cardId: Long) {
+        allCards.value.firstOrNull { it.id == cardId }?.let(::recordGameMistake)
     }
 
     private fun configurePersonalAi(value: AppSettings) {
@@ -2137,7 +2149,8 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
             "ARTICLE" -> appendAssistantMessage(
                 "ASSISTANT",
                 formatAssistantDisplayText(result.optString("article")).ifBlank { message },
-                kind = "ARTICLE"
+                kind = "ARTICLE",
+                payload = result.toString()
             )
             "CONFUSABLES" -> appendAssistantMessage(
                 "ASSISTANT",
@@ -2230,7 +2243,11 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
             LEARNING_ANALYSIS：另加 analysis，根據真實學習摘要分析，不可捏造次數。
             SORT 另加 direction（AZ 或 ZA）。
             COUNTABILITY 另加 updates：[ {"cardId":1,"partOfSpeech":"n. [C]"} ]。保留原本非名詞詞性；不確定時不要輸出該卡。
-            ARTICLE 另加 article，article 必須是可直接閱讀的純文字字串；文章必須自然並盡量使用相關單字，可附繁體中文說明。
+            ARTICLE 必須提供自然完整、盡量使用相關單字的英文文章，並回傳：
+            {"type":"ARTICLE","message":"簡短說明","article":"英文文章","articleTranslation":"完整繁體中文翻譯",
+            "targetCardIds":[真實卡片ID],"sentenceTranslations":[{"sentence":"英文原句","translation":"繁體中文逐句翻譯"}],
+            "questions":[{"prompt":"閱讀理解或克漏字題目","explanation":"繁體中文解析","cardId":1,"options":[{"text":"選項","correct":true}]}]}
+            targetCardIds 與 cardId 只能使用提供的真實卡片 ID。預設出 5 題並混合閱讀理解與克漏字；每題恰好一個正確答案。
             CONFUSABLES 必須先從提供的真實 App 卡片選出 folderWord，再用你的英文知識找出外部的易混淆字；
             不可把外部補充字說成原本就在資料夾。另加 groups：
             [{"folderWord":"affect","relatedWords":[{"word":"effect","explanation":"兩字的詞性、意思與用法差異"}]}]

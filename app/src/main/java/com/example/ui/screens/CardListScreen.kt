@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.DriveFileMove
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
@@ -86,6 +87,7 @@ import com.example.data.entity.Deck
 import com.example.data.entity.Flashcard
 import com.example.ui.components.AddFolderDialog
 import com.example.ui.components.CalmEmptyState
+import com.example.ui.components.PronunciationPracticeDialog
 import com.example.ui.components.rememberResponsiveLayout
 import com.example.util.OcrWordParser
 import kotlinx.coroutines.launch
@@ -115,12 +117,15 @@ fun CardListScreen(
     ) -> Unit = { _, _, _, _, _, done -> done(0, 0) },
     onEditCard: (Flashcard) -> Unit,
     onSpeak: (String) -> Unit,
+    onStopSpeaking: () -> Unit = {},
     onAddNewCard: () -> Unit,
     onOpenExternalImport: () -> Unit = {},
     onOpenScanner: () -> Unit = {},
     onStartReview: (Set<Long>?) -> Unit = { _ -> },
     onOpenQuizGames: (Set<Long>?) -> Unit = { _ -> },
     onOpenAssistant: () -> Unit = {},
+    pronunciationWeakCardIds: Set<Long> = emptySet(),
+    onPronunciationResult: (Long, Int) -> Unit = { _, _ -> },
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -140,6 +145,17 @@ fun CardListScreen(
     var showBulkDeleteConfirm by remember { mutableStateOf(false) }
     var showMoveCardsDialog by remember { mutableStateOf(false) }
     var showCreateMoveFolderDialog by remember { mutableStateOf(false) }
+    var pronunciationCard by remember { mutableStateOf<Flashcard?>(null) }
+
+    pronunciationCard?.let { card ->
+        PronunciationPracticeDialog(
+            card = card,
+            onSpeak = onSpeak,
+            onStopSpeaking = onStopSpeaking,
+            onResult = { score -> onPronunciationResult(card.id, score) },
+            onDismiss = { pronunciationCard = null }
+        )
+    }
 
     val activeDeck = decks.firstOrNull { it.id == selectedDeckId }
     LaunchedEffect(selectedDeckId) {
@@ -176,6 +192,7 @@ fun CardListScreen(
         val matchesTab = when (selectedTab) {
             1 -> card.nextReviewTimestamp <= System.currentTimeMillis() && !card.isMastered && !card.isSuspended
             2 -> card.isFavorite
+            3 -> card.id in pronunciationWeakCardIds
             else -> true
         }
 
@@ -607,12 +624,15 @@ fun CardListScreen(
                 it.nextReviewTimestamp <= System.currentTimeMillis() && !it.isMastered && !it.isSuspended
             }
             val favoriteCount = deckFilteredCards.count { it.isFavorite }
-            Row(
+            val pronunciationWeakCount = deckFilteredCards.count { it.id in pronunciationWeakCardIds }
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
                 modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 2.dp)
             ) {
-                PlainTab("全部 ${deckFilteredCards.size}", selectedTab == 0, { selectedTab = 0 }, Modifier.weight(1f))
-                PlainTab("待複習 $dueCount", selectedTab == 1, { selectedTab = 1 }, Modifier.weight(1f))
-                PlainTab("收藏 $favoriteCount", selectedTab == 2, { selectedTab = 2 }, Modifier.weight(1f))
+                item { PlainTab("全部 ${deckFilteredCards.size}", selectedTab == 0, { selectedTab = 0 }, Modifier.width(96.dp)) }
+                item { PlainTab("待複習 $dueCount", selectedTab == 1, { selectedTab = 1 }, Modifier.width(96.dp)) }
+                item { PlainTab("收藏 $favoriteCount", selectedTab == 2, { selectedTab = 2 }, Modifier.width(96.dp)) }
+                item { PlainTab("發音弱點 $pronunciationWeakCount", selectedTab == 3, { selectedTab = 3 }, Modifier.width(112.dp)) }
             }
 
             if (isMultiSelectMode) {
@@ -720,6 +740,7 @@ fun CardListScreen(
                                 onDeleteCard = { onDeleteCard(card) },
                                 onEditCard = { onEditCard(card) },
                                 onSpeak = { onSpeak(card.word) },
+                                onPracticePronunciation = { pronunciationCard = card },
                                 showReorder = dragReorderEnabled,
                                 dragHandleModifier = Modifier.draggableHandle()
                             )
@@ -744,6 +765,7 @@ private fun CardListItem(
     onDeleteCard: () -> Unit,
     onEditCard: () -> Unit,
     onSpeak: () -> Unit,
+    onPracticePronunciation: () -> Unit,
     showReorder: Boolean,
     dragHandleModifier: Modifier = Modifier
 ) {
@@ -840,6 +862,9 @@ private fun CardListItem(
                 }
                 IconButton(onClick = onSpeak) {
                     Icon(imageVector = Icons.AutoMirrored.Filled.VolumeUp, contentDescription = "發音", tint = MaterialTheme.colorScheme.primary)
+                }
+                IconButton(onClick = onPracticePronunciation) {
+                    Icon(imageVector = Icons.Default.Mic, contentDescription = "發音練習", tint = MaterialTheme.colorScheme.primary)
                 }
                 IconButton(onClick = onToggleFavorite) {
                     Icon(

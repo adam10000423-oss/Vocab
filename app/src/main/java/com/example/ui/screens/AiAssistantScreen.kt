@@ -111,6 +111,7 @@ import com.example.data.assistant.AssistantMessage
 import com.example.data.assistant.AssistantPendingAction
 import com.example.viewmodel.AssistantSendOutcome
 import com.example.data.entity.Deck
+import com.example.data.entity.Flashcard
 import com.example.ui.components.rememberResponsiveLayout
 import org.json.JSONArray
 import org.json.JSONObject
@@ -137,6 +138,7 @@ fun AiAssistantScreen(
     apiConfigured: Boolean,
     contextDeckName: String?,
     decks: List<Deck>,
+    cards: List<Flashcard>,
     selectedDeckIds: Set<Long>,
     onScopeChange: (Set<Long>) -> Unit,
     onSend: (String, List<Uri>) -> Unit,
@@ -144,6 +146,10 @@ fun AiAssistantScreen(
     onQuizCompleted: (String, Int, Int) -> Unit,
     onQuizRestart: (String) -> Unit,
     onQuizProgress: (String, Int, Int, Int, Map<Int, Int>) -> Unit,
+    onSpeak: (String) -> Unit,
+    onStopSpeaking: () -> Unit,
+    onPronunciationResult: (Long, Int) -> Unit,
+    onReadingMistake: (Long) -> Unit,
     onConfirmAction: () -> Unit,
     onCancelAction: () -> Unit,
     onUndoAction: () -> Unit,
@@ -217,6 +223,7 @@ fun AiAssistantScreen(
     val focusManager = LocalFocusManager.current
     val currentConversation = conversations.firstOrNull { it.id == currentConversationId }
     var activeQuizMessageId by remember { mutableStateOf<String?>(null) }
+    var activeArticleMessageId by remember { mutableStateOf<String?>(null) }
     var knownQuizMessageIds by remember {
         mutableStateOf<Set<String>>(messages.filter { it.kind == "QUIZ" }.mapTo(hashSetOf()) { it.id })
     }
@@ -332,6 +339,19 @@ fun AiAssistantScreen(
             onRestart = onQuizRestart,
             onProgress = onQuizProgress,
             onBack = { activeQuizMessageId = null }
+        )
+        return
+    }
+    val activeArticleMessage = activeArticleMessageId?.let { id -> messages.firstOrNull { it.id == id } }
+    if (activeArticleMessage != null) {
+        InteractiveReadingScreen(
+            message = activeArticleMessage,
+            cards = cards,
+            onSpeak = onSpeak,
+            onStopSpeaking = onStopSpeaking,
+            onPronunciationResult = onPronunciationResult,
+            onReadingMistake = onReadingMistake,
+            onBack = { activeArticleMessageId = null }
         )
         return
     }
@@ -593,6 +613,7 @@ fun AiAssistantScreen(
                             onQuizCompleted = onQuizCompleted,
                             onQuizRestart = onQuizRestart,
                             onOpenQuiz = { activeQuizMessageId = message.id },
+                            onOpenArticle = { activeArticleMessageId = message.id },
                             onPreviewImage = { previewImageUri = it }
                         )
                     }
@@ -952,6 +973,7 @@ private fun AssistantMessageBubble(
     onQuizCompleted: (String, Int, Int) -> Unit,
     onQuizRestart: (String) -> Unit,
     onOpenQuiz: () -> Unit,
+    onOpenArticle: () -> Unit,
     onPreviewImage: (Uri) -> Unit
 ) {
     val user = message.role == "USER"
@@ -1035,6 +1057,11 @@ private fun AssistantMessageBubble(
                             onOpenQuiz()
                         }
                     )
+                }
+                if (message.kind == "ARTICLE") {
+                    Button(onClick = onOpenArticle, modifier = Modifier.fillMaxWidth()) {
+                        Text("開始互動閱讀")
+                    }
                 }
             }
         }

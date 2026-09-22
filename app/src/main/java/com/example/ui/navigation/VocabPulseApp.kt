@@ -87,6 +87,7 @@ fun VocabApp(
     val assistantPendingAction by viewModel.assistantPendingAction.collectAsStateWithLifecycle()
     val assistantUndoAction by viewModel.assistantUndoAction.collectAsStateWithLifecycle()
     val assistantSelectedDeckIds by viewModel.assistantSelectedDeckIds.collectAsStateWithLifecycle()
+    val pronunciationWeakCardIds by viewModel.pronunciationWeakCardIds.collectAsStateWithLifecycle()
 
     var currentTab by remember { mutableIntStateOf(0) }
     var editingCard by remember { mutableStateOf<Flashcard?>(null) }
@@ -385,6 +386,7 @@ fun VocabApp(
                 contextDeckName = assistantSelectedDeckIds.singleOrNull()
                     ?.let { id -> decks.firstOrNull { it.id == id }?.name },
                 decks = decks,
+                cards = allCards,
                 selectedDeckIds = assistantSelectedDeckIds,
                 onScopeChange = viewModel::setAssistantScope,
                 onSend = viewModel::sendAssistantMessage,
@@ -392,6 +394,10 @@ fun VocabApp(
                 onQuizCompleted = viewModel::completeAssistantQuiz,
                 onQuizRestart = viewModel::restartAssistantQuiz,
                 onQuizProgress = viewModel::saveAssistantQuizProgress,
+                onSpeak = viewModel::speakText,
+                onStopSpeaking = viewModel::stopSpeaking,
+                onPronunciationResult = viewModel::recordPronunciationResult,
+                onReadingMistake = viewModel::recordReadingMistake,
                 onConfirmAction = viewModel::confirmAssistantAction,
                 onCancelAction = viewModel::cancelAssistantAction,
                 onUndoAction = viewModel::undoAssistantAction,
@@ -426,6 +432,7 @@ fun VocabApp(
                     navController.navigate(Routes.ADD_EDIT_CARD)
                 },
                 onSpeak = viewModel::speakText,
+                onStopSpeaking = viewModel::stopSpeaking,
                 onAddNewCard = {
                     editingCard = null
                     navController.navigate(Routes.ADD_EDIT_CARD)
@@ -461,6 +468,8 @@ fun VocabApp(
                     viewModel.openAssistant(selectedDeckId)
                     navController.navigate(Routes.AI_ASSISTANT) { launchSingleTop = true }
                 },
+                pronunciationWeakCardIds = pronunciationWeakCardIds,
+                onPronunciationResult = viewModel::recordPronunciationResult,
                 onBack = { navController.popBackStack() }
             )
         }
