@@ -18,12 +18,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Folder
@@ -49,6 +51,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -67,7 +70,8 @@ import com.example.data.entity.Flashcard
 import com.example.ui.components.CalmEmptyState
 import com.example.ui.components.AddFolderDialog
 import com.example.ui.components.EditFolderDialog
-import com.example.ui.components.ReorderDragHandle
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -105,6 +109,30 @@ fun FoldersManagementScreen(
     val sourceDeckIds = filteredDecks.map { it.id }
     var displayedDeckIds by remember(sourceDeckIds) { mutableStateOf(sourceDeckIds) }
     val displayedDecks = displayedDeckIds.mapNotNull { id -> filteredDecks.firstOrNull { it.id == id } }
+    val folderListState = rememberLazyListState()
+    var folderOrderChanged by remember { mutableStateOf(false) }
+    val folderReorderState = rememberReorderableLazyListState(
+        lazyListState = folderListState
+    ) { from, to ->
+        // The course selector occupies the first LazyColumn position.
+        if (displayedDeckIds.isNotEmpty()) {
+            val fromIndex = (from.index - 1).coerceIn(displayedDeckIds.indices)
+            val toIndex = (to.index - 1).coerceIn(displayedDeckIds.indices)
+            if (fromIndex != toIndex) {
+                displayedDeckIds = displayedDeckIds.toMutableList().apply {
+                    add(toIndex, removeAt(fromIndex))
+                }
+                folderOrderChanged = true
+            }
+        }
+    }
+
+    LaunchedEffect(folderReorderState.isAnyItemDragging) {
+        if (!folderReorderState.isAnyItemDragging && folderOrderChanged) {
+            onReorderFolders(displayedDeckIds)
+            folderOrderChanged = false
+        }
+    }
 
     if (showAddDialog) {
         AddFolderDialog(
@@ -221,6 +249,7 @@ fun FoldersManagementScreen(
         modifier = modifier
     ) { innerPadding ->
         LazyColumn(
+            state = folderListState,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
@@ -322,13 +351,17 @@ fun FoldersManagementScreen(
                         MaterialTheme.colorScheme.primary
                     }
 
-                    Card(
-                        shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                        ),
-                        modifier = Modifier.fillMaxWidth()
+                    ReorderableItem(
+                        state = folderReorderState,
+                        key = deck.id
                     ) {
+                        Card(
+                            shape = RoundedCornerShape(20.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
                         Column(
                             modifier = Modifier.padding(16.dp),
                             verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -366,27 +399,19 @@ fun FoldersManagementScreen(
                                 }
 
                                 Row(horizontalArrangement = Arrangement.spacedBy(0.dp)) {
-                                    ReorderDragHandle(
-                                        onDragStart = {},
-                                        onMoveOneStep = { direction ->
-                                            val fromIndex = displayedDeckIds.indexOf(deck.id)
-                                            val targetIndex = fromIndex + direction
-                                            if (fromIndex < 0 || targetIndex !in displayedDeckIds.indices) {
-                                                false
-                                            } else {
-                                                displayedDeckIds = displayedDeckIds.toMutableList().apply {
-                                                    val moving = removeAt(fromIndex)
-                                                    add(targetIndex, moving)
-                                                }
-                                                true
-                                            }
-                                        },
-                                        onDragEnd = {
-                                            if (displayedDeckIds != sourceDeckIds) {
-                                                onReorderFolders(displayedDeckIds)
-                                            }
-                                        }
-                                    )
+                                    IconButton(
+                                        onClick = {},
+                                        modifier = Modifier
+                                            .draggableHandle()
+                                            .size(36.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.DragHandle,
+                                            contentDescription = "拖曳調整資料夾順序",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
                                     IconButton(
                                         onClick = { editingDeck = deck },
                                         modifier = Modifier.size(36.dp)
@@ -468,6 +493,7 @@ fun FoldersManagementScreen(
                                     Text("測驗", fontWeight = FontWeight.Bold)
                                 }
                             }
+                        }
                         }
                     }
                 }

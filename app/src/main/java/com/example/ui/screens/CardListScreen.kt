@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -34,6 +35,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.DocumentScanner
+import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.DriveFileMove
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -85,9 +87,10 @@ import com.example.data.entity.Flashcard
 import com.example.ui.components.AddFolderDialog
 import com.example.ui.components.CalmEmptyState
 import com.example.ui.components.rememberResponsiveLayout
-import com.example.ui.components.ReorderDragHandle
 import com.example.util.OcrWordParser
 import kotlinx.coroutines.launch
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -188,6 +191,29 @@ fun CardListScreen(
         displayedCardIds.mapNotNull { id -> finalFilteredCards.firstOrNull { it.id == id } }
     } else {
         finalFilteredCards
+    }
+    val cardListState = rememberLazyListState()
+    var cardOrderChanged by remember { mutableStateOf(false) }
+    val cardReorderState = rememberReorderableLazyListState(
+        lazyListState = cardListState
+    ) { from, to ->
+        if (dragReorderEnabled && displayedCardIds.isNotEmpty()) {
+            val fromIndex = from.index.coerceIn(displayedCardIds.indices)
+            val toIndex = to.index.coerceIn(displayedCardIds.indices)
+            if (fromIndex != toIndex) {
+                displayedCardIds = displayedCardIds.toMutableList().apply {
+                    add(toIndex, removeAt(fromIndex))
+                }
+                cardOrderChanged = true
+            }
+        }
+    }
+
+    LaunchedEffect(cardReorderState.isAnyItemDragging) {
+        if (!cardReorderState.isAnyItemDragging && cardOrderChanged) {
+            selectedDeckId?.let { onReorderCards(it, displayedCardIds) }
+            cardOrderChanged = false
+        }
     }
 
     // Dialog for Choosing Add Card Method
@@ -673,44 +699,31 @@ fun CardListScreen(
                 )
             } else {
                 LazyColumn(
+                    state = cardListState,
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
                     itemsIndexed(displayedCards, key = { _, card -> card.id }) { _, card ->
                         val isSelected = selectedCards.contains(card)
-                        CardListItem(
-                            card = card,
-                            isMultiSelectMode = isMultiSelectMode,
-                            isSelected = isSelected,
-                            onToggleSelect = {
-                                if (isSelected) selectedCards.remove(card) else selectedCards.add(card)
-                            },
-                            onToggleFavorite = { onToggleFavorite(card) },
-                            onDeleteCard = { onDeleteCard(card) },
-                            onEditCard = { onEditCard(card) },
-                            onSpeak = { onSpeak(card.word) },
-                            showReorder = dragReorderEnabled,
-                            onMoveOneStep = { direction ->
-                                val fromIndex = displayedCardIds.indexOf(card.id)
-                                val targetIndex = fromIndex + direction
-                                if (fromIndex < 0 || targetIndex !in displayedCardIds.indices) {
-                                    false
-                                } else {
-                                    displayedCardIds = displayedCardIds.toMutableList().apply {
-                                        val moving = removeAt(fromIndex)
-                                        add(targetIndex, moving)
-                                    }
-                                    true
-                                }
-                            },
-                            onReorderFinished = {
-                                selectedDeckId?.let { deckId ->
-                                    if (displayedCardIds != sourceCardIds) {
-                                        onReorderCards(deckId, displayedCardIds)
-                                    }
-                                }
-                            }
-                        )
+                        ReorderableItem(
+                            state = cardReorderState,
+                            key = card.id
+                        ) {
+                            CardListItem(
+                                card = card,
+                                isMultiSelectMode = isMultiSelectMode,
+                                isSelected = isSelected,
+                                onToggleSelect = {
+                                    if (isSelected) selectedCards.remove(card) else selectedCards.add(card)
+                                },
+                                onToggleFavorite = { onToggleFavorite(card) },
+                                onDeleteCard = { onDeleteCard(card) },
+                                onEditCard = { onEditCard(card) },
+                                onSpeak = { onSpeak(card.word) },
+                                showReorder = dragReorderEnabled,
+                                dragHandleModifier = Modifier.draggableHandle()
+                            )
+                        }
                     }
                     item {
                         Spacer(modifier = Modifier.height(80.dp))
@@ -732,8 +745,7 @@ private fun CardListItem(
     onEditCard: () -> Unit,
     onSpeak: () -> Unit,
     showReorder: Boolean,
-    onMoveOneStep: (Int) -> Boolean,
-    onReorderFinished: () -> Unit
+    dragHandleModifier: Modifier = Modifier
 ) {
     Card(
         shape = RoundedCornerShape(18.dp),
@@ -815,11 +827,16 @@ private fun CardListItem(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 if (showReorder) {
-                    ReorderDragHandle(
-                        onDragStart = {},
-                        onMoveOneStep = onMoveOneStep,
-                        onDragEnd = onReorderFinished
-                    )
+                    IconButton(
+                        onClick = {},
+                        modifier = dragHandleModifier.size(48.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.DragHandle,
+                            contentDescription = "拖曳調整單字順序",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
                 IconButton(onClick = onSpeak) {
                     Icon(imageVector = Icons.AutoMirrored.Filled.VolumeUp, contentDescription = "發音", tint = MaterialTheme.colorScheme.primary)
