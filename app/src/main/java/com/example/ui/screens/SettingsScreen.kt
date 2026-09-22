@@ -30,6 +30,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Key
@@ -50,6 +52,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Slider
@@ -75,6 +78,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.example.BuildConfig
 import com.example.data.settings.AppSettings
+import com.example.data.settings.ReminderTime
 import com.example.data.api.AiProvider
 import com.example.data.api.AiApiProfile
 import com.example.util.TtsVoiceOption
@@ -91,7 +95,7 @@ fun SettingsScreen(
     settings: AppSettings,
     onBooleanChange: (String, Boolean) -> Unit,
     onIntChange: (String, Int) -> Unit,
-    onReminderTimeChange: (Int, Int) -> Unit,
+    onReminderTimesChange: (List<ReminderTime>) -> Unit,
     onThemeChange: (String) -> Unit,
     onThemeColorPresetChange: (String) -> Unit,
     onCustomThemeColorsChange: (String, String) -> Unit,
@@ -166,9 +170,10 @@ fun SettingsScreen(
         ActivityResultContracts.StartActivityForResult()
     ) {
         downloadedApk?.takeIf(File::exists)?.let { apk ->
-            when (GitHubUpdateManager.launchInstaller(context, apk)) {
+            when (val launch = GitHubUpdateManager.launchInstaller(context, apk)) {
                 InstallLaunchResult.InstallerOpened -> updateStatus = "已開啟系統安裝畫面"
                 is InstallLaunchResult.PermissionRequired -> updateStatus = "請允許安裝此來源後再按一次安裝"
+                is InstallLaunchResult.Failed -> updateStatus = "安裝失敗：${launch.message}"
             }
         }
     }
@@ -185,6 +190,27 @@ fun SettingsScreen(
         ActivityResultContracts.RequestPermission()
     ) { granted -> onBooleanChange("remindersEnabled", granted) }
 
+    fun openReminderPicker(index: Int? = null) {
+        val current = index?.let { settings.reminderTimes.getOrNull(it) }
+        TimePickerDialog(
+            context,
+            { _, hour, minute ->
+                val picked = ReminderTime(hour, minute)
+                val updated = if (index == null) {
+                    settings.reminderTimes + picked
+                } else {
+                    settings.reminderTimes.mapIndexed { itemIndex, time ->
+                        if (itemIndex == index) picked else time
+                    }
+                }
+                onReminderTimesChange(updated.distinct().sorted())
+            },
+            current?.hour ?: 20,
+            current?.minute ?: 0,
+            true
+        ).show()
+    }
+
     fun checkForUpdates() {
         if (updateBusy) return
         updateBusy = true
@@ -193,10 +219,17 @@ fun SettingsScreen(
             when (val result = GitHubUpdateManager.checkForUpdate()) {
                 is UpdateCheckResult.Available -> {
                     availableRelease = result.release
-                    updateStatus = "發現 Vocab ${result.release.version}"
+                    downloadedApk = GitHubUpdateManager.findDownloadedApk(context, result.release.version)
+                    updateStatus = if (downloadedApk != null) {
+                        "Vocab ${result.release.version} 已下載，可直接再次安裝"
+                    } else {
+                        "發現 Vocab ${result.release.version}"
+                    }
                 }
                 UpdateCheckResult.UpToDate -> {
                     availableRelease = null
+                    downloadedApk = null
+                    GitHubUpdateManager.cleanupInstalledDownloads(context)
                     updateStatus = "目前已是最新版本"
                 }
                 is UpdateCheckResult.Failed -> {
@@ -208,25 +241,35 @@ fun SettingsScreen(
         }
     }
 
-    fun downloadAndInstall(release: GitHubRelease) {
+    fun openInstaller(apk: File) {
+        when (val launch = GitHubUpdateManager.launchInstaller(context, apk)) {
+            InstallLaunchResult.InstallerOpened -> updateStatus = "已開啟系統安裝畫面；若未完成，可回來再次安裝"
+            is InstallLaunchResult.PermissionRequired -> {
+                updateStatus = "請先允許 Vocab 安裝更新"
+                installPermissionLauncher.launch(launch.intent)
+            }
+            is InstallLaunchResult.Failed -> updateStatus = "安裝失敗：${launch.message}"
+        }
+    }
+
+    fun downloadAndInstall(release: GitHubRelease, forceDownload: Boolean = false) {
         if (updateBusy) return
         updateBusy = true
-        updateStatus = "準備下載 Vocab ${release.version}…"
+        updateStatus = if (forceDownload) {
+            "正在重新下載 Vocab ${release.version}…"
+        } else {
+            "準備下載 Vocab ${release.version}…"
+        }
         coroutineScope.launch {
             GitHubUpdateManager.downloadApk(
                 context = context,
                 release = release,
                 wifiOnly = settings.wifiOnlyUpdates,
+                forceDownload = forceDownload,
                 onProgress = { progress -> updateStatus = "正在下載… $progress%" }
             ).onSuccess { apk ->
                 downloadedApk = apk
-                when (val launch = GitHubUpdateManager.launchInstaller(context, apk)) {
-                    InstallLaunchResult.InstallerOpened -> updateStatus = "已開啟系統安裝畫面"
-                    is InstallLaunchResult.PermissionRequired -> {
-                        updateStatus = "請先允許 Vocab 安裝更新"
-                        installPermissionLauncher.launch(launch.intent)
-                    }
-                }
+                openInstaller(apk)
             }.onFailure {
                 updateStatus = it.message ?: "下載更新失敗"
             }
@@ -371,11 +414,14 @@ fun SettingsScreen(
                     SettingDropdown(
                         label = "字體",
                         value = settings.fontFamily,
-                        options = listOf("DEFAULT", "SERIF", "MONOSPACE"),
+                        options = listOf("DEFAULT", "ROUNDED", "SANS_SERIF", "SERIF", "CURSIVE", "MONOSPACE"),
                         optionText = {
                             when (it) {
-                                "SERIF" -> "襯線字體"
-                                "MONOSPACE" -> "等寬字體"
+                                "ROUNDED" -> "柔和圓體"
+                                "SANS_SERIF" -> "現代無襯線"
+                                "SERIF" -> "典雅襯線"
+                                "CURSIVE" -> "優雅手寫體"
+                                "MONOSPACE" -> "俐落等寬體"
                                 else -> "系統字體"
                             }
                         },
@@ -720,23 +766,43 @@ fun SettingsScreen(
                             onBooleanChange("remindersEnabled", it)
                         }
                     }
-                    Button(
-                        onClick = {
-                            TimePickerDialog(
-                                context,
-                                { _, hour, minute ->
-                                    onReminderTimeChange(hour, minute)
-                                },
-                                settings.reminderHour,
-                                settings.reminderMinute,
-                                true
-                            ).show()
-                        },
+                    settings.reminderTimes.forEachIndexed { index, reminder ->
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(start = 14.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    reminder.displayText(),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                IconButton(onClick = { openReminderPicker(index) }) {
+                                    Icon(Icons.Default.Edit, contentDescription = "編輯 ${reminder.displayText()}")
+                                }
+                                IconButton(
+                                    onClick = {
+                                        onReminderTimesChange(settings.reminderTimes.filterIndexed { itemIndex, _ -> itemIndex != index })
+                                    },
+                                    enabled = settings.reminderTimes.size > 1
+                                ) {
+                                    Icon(Icons.Default.Delete, contentDescription = "刪除 ${reminder.displayText()}")
+                                }
+                            }
+                        }
+                    }
+                    OutlinedButton(
+                        onClick = { openReminderPicker() },
+                        enabled = settings.reminderTimes.size < 12,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(
-                            "提醒時間 ${"%02d:%02d".format(settings.reminderHour, settings.reminderMinute)}"
-                        )
+                        Icon(Icons.Default.Add, contentDescription = null)
+                        Text("新增提醒時間")
                     }
                 }
             }
@@ -758,15 +824,33 @@ fun SettingsScreen(
                         Text("檢查更新")
                     }
                     availableRelease?.let { release ->
-                        Button(
-                            onClick = { downloadAndInstall(release) },
-                            enabled = !updateBusy,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("下載並安裝 Vocab ${release.version}")
+                        val cachedApk = downloadedApk?.takeIf(File::exists)
+                        if (cachedApk == null) {
+                            Button(
+                                onClick = { downloadAndInstall(release) },
+                                enabled = !updateBusy,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("下載並安裝 Vocab ${release.version}")
+                            }
+                        } else {
+                            Button(
+                                onClick = { openInstaller(cachedApk) },
+                                enabled = !updateBusy,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("再次安裝 Vocab ${release.version}")
+                            }
+                            OutlinedButton(
+                                onClick = { downloadAndInstall(release, forceDownload = true) },
+                                enabled = !updateBusy,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("重新下載安裝檔")
+                            }
                         }
                         Text(
-                            "下載後會開啟 Android 系統安裝畫面，需由你確認安裝。",
+                            "安裝取消或失敗時會保留這份 APK，可直接再次安裝；重新下載或成功升級後會自動清除舊檔。",
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }

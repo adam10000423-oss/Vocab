@@ -14,6 +14,7 @@ import com.example.data.importer.ExternalCardCandidate
 import com.example.data.importer.AiExternalFormattingResult
 import com.example.data.learning.LearningSessionStore
 import com.example.data.settings.AppSettings
+import com.example.data.settings.ReminderTime
 import com.example.data.settings.SettingsRepository
 import com.example.util.DocumentParser
 import com.example.util.AiImagePreprocessor
@@ -443,12 +444,8 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
         viewModelScope.launch {
             settingsRepository.setBoolean(name, enabled)
             if (name == "remindersEnabled") {
-                if (enabled) StudyReminderScheduler.schedule(
-                    getApplication(),
-                    settings.value.reminderHour,
-                    settings.value.reminderMinute
-                )
-                else StudyReminderScheduler.cancel(getApplication())
+                if (enabled) StudyReminderScheduler.scheduleAll(getApplication(), settings.value.reminderTimes)
+                else StudyReminderScheduler.cancelAll(getApplication(), settings.value.reminderTimes)
             }
         }
     }
@@ -472,6 +469,18 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
             settingsRepository.setReminderTime(hour, minute)
             if (settings.value.remindersEnabled) {
                 StudyReminderScheduler.schedule(getApplication(), hour, minute)
+            }
+        }
+    }
+
+    fun updateReminderTimes(times: List<ReminderTime>) {
+        viewModelScope.launch {
+            val oldTimes = settings.value.reminderTimes
+            settingsRepository.setReminderTimes(times)
+            if (settings.value.remindersEnabled) {
+                StudyReminderScheduler.replaceAll(getApplication(), oldTimes, times)
+            } else {
+                StudyReminderScheduler.cancelAll(getApplication(), oldTimes)
             }
         }
     }
@@ -666,7 +675,7 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
                 GeminiService.configurePersonalApis(emptyList())
                 _apiKeyConfigured.value = false
                 _availableAiModels.value = emptyList()
-                StudyReminderScheduler.cancel(getApplication())
+                StudyReminderScheduler.cancelAll(getApplication(), settings.value.reminderTimes)
                 _selectedDeckId.value = null
             }.onSuccess {
                 _dataMessage.value = "所有資料已清空，現在可從 0 開始"

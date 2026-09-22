@@ -1,5 +1,6 @@
 package com.example.ui.theme
 
+import android.graphics.Typeface
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -179,7 +180,10 @@ fun MyApplicationTheme(
         )
     }
     val family = when (fontFamilyName) {
+        "ROUNDED" -> FontFamily(Typeface.create("sans-serif-rounded", Typeface.NORMAL))
+        "SANS_SERIF" -> FontFamily.SansSerif
         "SERIF" -> FontFamily.Serif
+        "CURSIVE" -> FontFamily.Cursive
         "MONOSPACE" -> FontFamily.Monospace
         else -> FontFamily.Default
     }

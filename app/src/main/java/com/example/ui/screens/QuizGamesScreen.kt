@@ -117,6 +117,7 @@ fun QuizGamesScreen(
     onGameActiveChange: (Boolean) -> Unit = {},
     onBack: (() -> Unit)? = null,
     onOpenAssistant: () -> Unit = {},
+    showHubTopBar: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     var activeGameDeckIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
@@ -279,7 +280,7 @@ fun QuizGamesScreen(
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            TopAppBar(
+            if (showHubTopBar) TopAppBar(
                 expandedHeight = 48.dp,
                 windowInsets = WindowInsets(0, 0, 0, 0),
                 title = {

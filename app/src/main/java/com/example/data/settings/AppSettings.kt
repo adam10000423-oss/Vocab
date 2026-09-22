@@ -2,6 +2,16 @@ package com.example.data.settings
 
 import com.example.data.api.AiPromptDefaults
 
+data class ReminderTime(
+    val hour: Int,
+    val minute: Int
+) : Comparable<ReminderTime> {
+    override fun compareTo(other: ReminderTime): Int =
+        (hour * 60 + minute).compareTo(other.hour * 60 + other.minute)
+
+    fun displayText(): String = "%02d:%02d".format(hour, minute)
+}
+
 data class AppSettings(
     val onboardingCompleted: Boolean = false,
     val dataInitialized: Boolean = false,
@@ -38,6 +48,7 @@ data class AppSettings(
     val remindersEnabled: Boolean = false,
     val reminderHour: Int = 20,
     val reminderMinute: Int = 0,
+    val reminderTimes: List<ReminderTime> = listOf(ReminderTime(20, 0)),
     val gameMistakesToReview: Boolean = true,
     val autoCheckUpdates: Boolean = true,
     val wifiOnlyUpdates: Boolean = true,

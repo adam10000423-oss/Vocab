@@ -89,6 +89,7 @@ fun FoldersManagementScreen(
     onJumpToStudy: (deckId: Long) -> Unit,
     onJumpToQuiz: (deckId: Long) -> Unit,
     onOpenAssistant: () -> Unit = {},
+    showTopBar: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     var showAddDialog by remember { mutableStateOf(false) }
@@ -219,7 +220,7 @@ fun FoldersManagementScreen(
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            TopAppBar(
+            if (showTopBar) TopAppBar(
                 expandedHeight = 48.dp,
                 windowInsets = WindowInsets(0, 0, 0, 0),
                 title = {

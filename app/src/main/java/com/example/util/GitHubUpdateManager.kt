@@ -2,6 +2,7 @@ package com.example.util
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.Uri
@@ -33,6 +34,7 @@ sealed interface UpdateCheckResult {
 sealed interface InstallLaunchResult {
     data object InstallerOpened : InstallLaunchResult
     data class PermissionRequired(val intent: Intent) : InstallLaunchResult
+    data class Failed(val message: String) : InstallLaunchResult
 }
 
 object GitHubUpdateManager {
@@ -86,10 +88,17 @@ object GitHubUpdateManager {
         context: Context,
         release: GitHubRelease,
         wifiOnly: Boolean,
+        forceDownload: Boolean = false,
         onProgress: (Int) -> Unit
     ): Result<File> = withContext(Dispatchers.IO) {
         runCatching {
+            val updateDir = updateDirectory(context)
+            val target = updateFile(context, release.version)
+            if (!forceDownload && isUsableApk(context, target, release.version)) {
+                return@runCatching target
+            }
             if (wifiOnly && !isOnWifi(context)) error("目前不是 Wi-Fi 連線")
+            val partial = File(updateDir, "${target.name}.part").apply { delete() }
             val request = Request.Builder()
                 .url(release.apkUrl)
                 .header("User-Agent", "Vocab-Android/${BuildConfig.VERSION_NAME}")
@@ -97,11 +106,9 @@ object GitHubUpdateManager {
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) error("下載失敗（${response.code}）")
                 val body = response.body ?: error("下載內容是空的")
-                val updateDir = File(context.cacheDir, "updates").apply { mkdirs() }
-                val target = File(updateDir, "Vocab-${release.version}.apk")
                 val total = body.contentLength()
                 body.byteStream().use { input ->
-                    target.outputStream().use { output ->
+                    partial.outputStream().use { output ->
                         val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
                         var copied = 0L
                         while (true) {
@@ -113,13 +120,42 @@ object GitHubUpdateManager {
                         }
                     }
                 }
-                if (target.length() == 0L) error("下載的 APK 無效")
+                if (!isUsableApk(context, partial, release.version)) {
+                    partial.delete()
+                    error("下載的 APK 無效或版本不符")
+                }
+                target.delete()
+                if (!partial.renameTo(target)) {
+                    partial.copyTo(target, overwrite = true)
+                    partial.delete()
+                }
+                deleteOtherDownloads(context, keep = target)
                 target
             }
         }
     }
 
+    fun findDownloadedApk(context: Context, version: String): File? =
+        updateFile(context, version).takeIf { isUsableApk(context, it, version) }
+
+    /** Deletes installers that are already installed, while preserving a newer failed/pending update. */
+    fun cleanupInstalledDownloads(context: Context) {
+        updateDirectory(context).listFiles().orEmpty().forEach { file ->
+            val version = file.name
+                .removePrefix("Vocab-")
+                .removeSuffix(".apk")
+            when {
+                file.extension.equals("part", ignoreCase = true) -> file.delete()
+                file.extension.equals("apk", ignoreCase = true) &&
+                    !isNewer(version, BuildConfig.VERSION_NAME) -> file.delete()
+            }
+        }
+    }
+
     fun launchInstaller(context: Context, apk: File): InstallLaunchResult {
+        if (!isUsableApk(context, apk)) {
+            return InstallLaunchResult.Failed("安裝檔不存在或已損毀，請重新下載")
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
             !context.packageManager.canRequestPackageInstalls()
         ) {
@@ -130,19 +166,48 @@ object GitHubUpdateManager {
                 )
             )
         }
-        val uri = FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.fileprovider",
-            apk
-        )
-        context.startActivity(
-            Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, "application/vnd.android.package-archive")
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-        )
-        return InstallLaunchResult.InstallerOpened
+        return runCatching {
+            val uri = FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                apk
+            )
+            context.startActivity(
+                Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(uri, "application/vnd.android.package-archive")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+            )
+            InstallLaunchResult.InstallerOpened
+        }.getOrElse { InstallLaunchResult.Failed(it.message ?: "無法開啟系統安裝畫面") }
+    }
+
+    private fun updateDirectory(context: Context): File =
+        File(context.filesDir, "updates").apply { mkdirs() }
+
+    private fun updateFile(context: Context, version: String): File =
+        File(updateDirectory(context), "Vocab-$version.apk")
+
+    private fun deleteOtherDownloads(context: Context, keep: File) {
+        updateDirectory(context).listFiles().orEmpty().forEach { file ->
+            if (file.absolutePath != keep.absolutePath) file.delete()
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun isUsableApk(context: Context, apk: File, expectedVersion: String? = null): Boolean {
+        if (!apk.isFile || apk.length() == 0L) return false
+        val info = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.packageManager.getPackageArchiveInfo(
+                apk.absolutePath,
+                PackageManager.PackageInfoFlags.of(0)
+            )
+        } else {
+            context.packageManager.getPackageArchiveInfo(apk.absolutePath, 0)
+        } ?: return false
+        return info.packageName == context.packageName &&
+            (expectedVersion == null || info.versionName == expectedVersion)
     }
 
     private fun isOnWifi(context: Context): Boolean {

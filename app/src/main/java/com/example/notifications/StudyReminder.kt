@@ -13,6 +13,7 @@ import com.example.MainActivity
 import com.example.R
 import com.example.data.AppDatabase
 import com.example.data.settings.SettingsRepository
+import com.example.data.settings.ReminderTime
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -20,17 +21,31 @@ import kotlinx.coroutines.launch
 import java.util.Calendar
 
 object StudyReminderScheduler {
-    private const val REQUEST_CODE = 4102
+    private const val REQUEST_CODE_BASE = 4102
 
     fun schedule(context: Context, hour: Int, minute: Int = 0) {
+        scheduleOne(context, ReminderTime(hour, minute))
+    }
+
+    fun scheduleAll(context: Context, times: List<ReminderTime>) {
+        times.distinct().forEach { scheduleOne(context, it) }
+    }
+
+    fun replaceAll(context: Context, oldTimes: List<ReminderTime>, newTimes: List<ReminderTime>) {
+        cancelAll(context, oldTimes)
+        scheduleAll(context, newTimes)
+    }
+
+    private fun scheduleOne(context: Context, time: ReminderTime) {
         val manager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val trigger = Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, hour.coerceIn(0, 23))
-            set(Calendar.MINUTE, minute.coerceIn(0, 59))
+            set(Calendar.HOUR_OF_DAY, time.hour.coerceIn(0, 23))
+            set(Calendar.MINUTE, time.minute.coerceIn(0, 59))
             set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
             if (timeInMillis <= System.currentTimeMillis()) add(Calendar.DAY_OF_YEAR, 1)
         }.timeInMillis
-        val intent = pendingIntent(context)
+        val intent = pendingIntent(context, time)
         manager.cancel(intent)
         when {
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && manager.canScheduleExactAlarms() ->
@@ -42,12 +57,28 @@ object StudyReminderScheduler {
     }
 
     fun cancel(context: Context) {
-        (context.getSystemService(Context.ALARM_SERVICE) as AlarmManager).cancel(pendingIntent(context))
+        cancelAll(context, listOf(ReminderTime(20, 0)))
     }
 
-    private fun pendingIntent(context: Context) = PendingIntent.getBroadcast(
+    fun cancelAll(context: Context, times: List<ReminderTime>) {
+        val manager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        times.distinct().forEach { manager.cancel(pendingIntent(context, it)) }
+        // Cancel the pre-multi-reminder PendingIntent used by older versions.
+        manager.cancel(legacyPendingIntent(context))
+    }
+
+    private fun pendingIntent(context: Context, time: ReminderTime) = PendingIntent.getBroadcast(
         context,
-        REQUEST_CODE,
+        REQUEST_CODE_BASE + time.hour * 60 + time.minute,
+        Intent(context, StudyReminderReceiver::class.java).apply {
+            action = "com.aistudio.vocabpulse.REMINDER_${time.hour}_${time.minute}"
+        },
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+    )
+
+    private fun legacyPendingIntent(context: Context) = PendingIntent.getBroadcast(
+        context,
+        REQUEST_CODE_BASE,
         Intent(context, StudyReminderReceiver::class.java),
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
     )
@@ -62,7 +93,7 @@ class StudyReminderReceiver : BroadcastReceiver() {
             } finally {
                 val settings = SettingsRepository(context).settings.first()
                 if (settings.remindersEnabled) {
-                    StudyReminderScheduler.schedule(context, settings.reminderHour, settings.reminderMinute)
+                    StudyReminderScheduler.scheduleAll(context, settings.reminderTimes)
                 }
                 pendingResult.finish()
             }
@@ -100,7 +131,14 @@ class StudyReminderReceiver : BroadcastReceiver() {
             .setContentIntent(openApp)
             .setAutoCancel(true)
             .build()
-        runCatching { notificationManager.notify(4102, notification) }
+        val notificationId = REQUEST_NOTIFICATION_BASE + Calendar.getInstance().let {
+            it.get(Calendar.HOUR_OF_DAY) * 60 + it.get(Calendar.MINUTE)
+        }
+        runCatching { notificationManager.notify(notificationId, notification) }
+    }
+
+    private companion object {
+        const val REQUEST_NOTIFICATION_BASE = 6200
     }
 }
 
@@ -111,9 +149,9 @@ class StudyReminderRestoreReceiver : BroadcastReceiver() {
             try {
                 val settings = SettingsRepository(context).settings.first()
                 if (settings.remindersEnabled) {
-                    StudyReminderScheduler.schedule(context, settings.reminderHour, settings.reminderMinute)
+                    StudyReminderScheduler.scheduleAll(context, settings.reminderTimes)
                 } else {
-                    StudyReminderScheduler.cancel(context)
+                    StudyReminderScheduler.cancelAll(context, settings.reminderTimes)
                 }
             } finally {
                 pendingResult.finish()

@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -24,6 +25,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Search
@@ -34,6 +36,8 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -62,6 +66,7 @@ import com.example.data.importer.AiExternalFormattingResult
 import com.example.data.importer.ExternalCardCandidate
 import com.example.data.importer.ExternalDeckImporter
 import com.example.data.importer.ExternalVocabularySource
+import com.example.data.importer.ExternalSearchResult
 import com.example.data.importer.ImportCapability
 import kotlinx.coroutines.launch
 
@@ -96,6 +101,8 @@ fun ExternalImportScreen(
     }
     var selectedSource by remember { mutableStateOf(ExternalDeckImporter.sources.first()) }
     var searchQuery by remember { mutableStateOf("") }
+    var sourceMenuExpanded by remember { mutableStateOf(false) }
+    var searchResults by remember { mutableStateOf<List<ExternalSearchResult>>(emptyList()) }
     var shareUrl by remember { mutableStateOf("") }
     var pastedText by remember { mutableStateOf("") }
     var guidance by remember {
@@ -268,6 +275,32 @@ fun ExternalImportScreen(
 
                 ExternalImportMode.SEARCH -> item {
                     ImportPanel("搜尋平台", Icons.Default.Search) {
+                        Text("選擇網站", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            OutlinedButton(
+                                onClick = { sourceMenuExpanded = true },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(selectedSource.name, modifier = Modifier.weight(1f))
+                                Icon(Icons.Default.ArrowDropDown, contentDescription = "選擇網站")
+                            }
+                            DropdownMenu(
+                                expanded = sourceMenuExpanded,
+                                onDismissRequest = { sourceMenuExpanded = false }
+                            ) {
+                                ExternalDeckImporter.sources.forEach { source ->
+                                    DropdownMenuItem(
+                                        text = { Text(source.name) },
+                                        onClick = {
+                                            selectedSource = source
+                                            sourceMenuExpanded = false
+                                            searchResults = emptyList()
+                                            guidance = source.guidance
+                                        }
+                                    )
+                                }
+                            }
+                        }
                         OutlinedTextField(
                             value = searchQuery,
                             onValueChange = { searchQuery = it },
@@ -275,28 +308,38 @@ fun ExternalImportScreen(
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
-                        Text("選擇來源", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            items(ExternalDeckImporter.sources) { source ->
-                                FilterChip(
-                                    selected = selectedSource.id == source.id,
-                                    onClick = {
-                                        selectedSource = source
-                                        guidance = source.guidance
-                                    },
-                                    label = { Text(source.name) }
-                                )
-                            }
-                        }
                         Button(
                             onClick = {
-                                if (searchQuery.isBlank()) guidance = "請輸入搜尋關鍵字"
-                                else openUrl(selectedSource.buildSearchUrl(searchQuery))
+                                if (searchQuery.isBlank()) {
+                                    guidance = "請輸入搜尋關鍵字"
+                                } else scope.launch {
+                                    loading = true
+                                    searchResults = emptyList()
+                                    guidance = "正在搜尋 ${selectedSource.name} 的真實公開結果…"
+                                    runCatching {
+                                        ExternalDeckImporter.searchPublicDecks(
+                                            context,
+                                            selectedSource,
+                                            searchQuery
+                                        )
+                                    }.onSuccess { results ->
+                                        searchResults = results
+                                        guidance = if (results.isEmpty()) {
+                                            "${selectedSource.name} 沒有找到可辨識的公開結果"
+                                        } else {
+                                            "找到 ${results.size} 個結果，選擇後會讀取該頁實際公開的卡片。"
+                                        }
+                                    }.onFailure {
+                                        guidance = "搜尋失敗：${it.message ?: "網站沒有回傳公開結果"}"
+                                    }
+                                    loading = false
+                                }
                             },
+                            enabled = !loading,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Icon(Icons.Default.OpenInBrowser, contentDescription = null)
-                                Text("前往 ${selectedSource.name}")
+                            Icon(Icons.Default.Search, contentDescription = null)
+                            Text("搜尋 ${selectedSource.name}")
                         }
                         Text(
                             when (selectedSource.capability) {
@@ -310,6 +353,73 @@ fun ExternalImportScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        searchResults.forEach { result ->
+                            Card(
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+                                ),
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text(result.title, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    if (result.description.isNotBlank()) {
+                                        Text(
+                                            result.description,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 3,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                    Text(
+                                        result.url,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Button(
+                                        onClick = {
+                                            when (selectedSource.capability) {
+                                                ImportCapability.PUBLIC_SHARE_PAGE -> scope.launch {
+                                                    loading = true
+                                                    guidance = "正在依原始順序讀取「${result.title}」…"
+                                                    runCatching {
+                                                        ExternalDeckImporter.fetchSharedDeck(context, result.url)
+                                                    }.onSuccess {
+                                                        showParsed(it.title, it.sourceName, it.cards)
+                                                        guidance = "${it.sourceName} 解析完成：${it.cards.size} 張，已保留來源順序並移除重複項目。"
+                                                    }.onFailure {
+                                                        guidance = "此結果無法匯入：${it.message ?: "頁面沒有公開卡片資料"}"
+                                                    }
+                                                    loading = false
+                                                }
+                                                else -> {
+                                                    guidance = selectedSource.guidance
+                                                    openUrl(result.url)
+                                                }
+                                            }
+                                        },
+                                        enabled = !loading,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Icon(
+                                            if (selectedSource.capability == ImportCapability.PUBLIC_SHARE_PAGE) Icons.Default.Download
+                                            else Icons.Default.OpenInBrowser,
+                                            contentDescription = null
+                                        )
+                                        Text(
+                                            if (selectedSource.capability == ImportCapability.PUBLIC_SHARE_PAGE) "選擇並匯入"
+                                            else "開啟官方頁面"
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
 

@@ -55,6 +55,13 @@ data class ParsedExternalDeck(
     val cards: List<ExternalCardCandidate>
 )
 
+data class ExternalSearchResult(
+    val title: String,
+    val url: String,
+    val description: String = "",
+    val sourceName: String
+)
+
 data class AiExternalFormattingResult(
     val cards: List<ExternalCardCandidate>,
     val formattedCount: Int,
@@ -85,8 +92,8 @@ object ExternalDeckImporter {
         ExternalVocabularySource(
             "kahoot", "Kahoot!", listOf("kahoot.com", "create.kahoot.it", "kahoot.it"),
             "https://create.kahoot.it/discover?query={query}",
-            ImportCapability.OFFICIAL_SEARCH_ONLY,
-            "可開啟官方 Discover 搜尋公開內容；Kahoot 沒有提供第三方批次匯出 API，可改貼上題目與答案或匯入文字檔。"
+            ImportCapability.PUBLIC_SHARE_PAGE,
+            "可搜尋公開 Kahoot；只有公開頁實際提供題目與正確答案時才會匯入。"
         ),
         source("wordup", "WORD UP", listOf("wordup.com.tw"), "https://www.google.com/search?q=site%3Awordup.com.tw+{query}"),
         source("lingvist", "Lingvist", listOf("lingvist.com", "lingvist.io"), "https://lingvist.com/search/?q={query}"),
@@ -120,7 +127,12 @@ object ExternalDeckImporter {
             ImportCapability.PUBLIC_SHARE_PAGE,
             "可貼上公開 Flashcards 分享網址，從頁面實際顯示的 Front／Back 匯入。"
         ),
-        source("studysmarter", "StudySmarter", listOf("studysmarter.co.uk", "studysmarter.de"), "https://www.studysmarter.co.uk/search/?query={query}"),
+        ExternalVocabularySource(
+            "studysmarter", "StudySmarter", listOf("studysmarter.co.uk", "studysmarter.de"),
+            "https://www.studysmarter.co.uk/search/?query={query}",
+            ImportCapability.PUBLIC_SHARE_PAGE,
+            "可搜尋並讀取公開 Flashcards 頁；需要登入或沒有公開正反面的內容不會匯入。"
+        ),
         source("memrise", "Memrise", listOf("memrise.com"), "https://www.google.com/search?q=site%3Amemrise.com+{query}"),
         source("remnote", "RemNote", listOf("remnote.com"), "https://www.google.com/search?q=site%3Aremnote.com+{query}"),
         source("mochi", "Mochi Cards", listOf("mochi.cards"), "https://www.google.com/search?q=site%3Amochi.cards+{query}")
@@ -164,8 +176,12 @@ object ExternalDeckImporter {
 
     suspend fun fetchSharedDeck(context: Context, url: String): ParsedExternalDeck {
         requireSafeHttpsUrl(url)
-        if (detectSource(url)?.id == "quizlet") {
+        val detected = detectSource(url)
+        if (detected?.id == "quizlet") {
             return QuizletWebViewImporter.fetch(context, url)
+        }
+        if (detected != null && detected.hosts.isNotEmpty()) {
+            return PublicDeckWebViewImporter.fetch(context, detected, url)
         }
         return withContext(Dispatchers.IO) {
         val endpoint = "${BuildConfig.BACKEND_BASE_URL.trimEnd('/')}/api/v1/import/url"
@@ -212,6 +228,15 @@ object ExternalDeckImporter {
             ParsedExternalDeck(title, sourceName, cards.take(5_000))
         }
     }
+    }
+
+    suspend fun searchPublicDecks(
+        context: Context,
+        source: ExternalVocabularySource,
+        query: String
+    ): List<ExternalSearchResult> {
+        require(query.isNotBlank()) { "請輸入搜尋關鍵字" }
+        return PublicDeckWebViewImporter.search(context, source, query.trim())
     }
 
     suspend fun parseUri(context: Context, uri: Uri): ParsedExternalDeck = withContext(Dispatchers.IO) {

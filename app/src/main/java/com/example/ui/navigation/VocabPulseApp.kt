@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -97,9 +98,11 @@ fun VocabApp(
     var quizGameActive by remember { mutableStateOf(false) }
     var updateAvailable by remember { mutableStateOf(false) }
     val updateCheckScope = rememberCoroutineScope()
+    val appContext = LocalContext.current.applicationContext
 
     LifecycleEventEffect(Lifecycle.Event.ON_START) {
         updateCheckScope.launch {
+            GitHubUpdateManager.cleanupInstalledDownloads(appContext)
             updateAvailable = GitHubUpdateManager.checkForUpdate() is UpdateCheckResult.Available
         }
     }
@@ -156,6 +159,12 @@ fun VocabApp(
                     currentTab = it
                 },
                 showBottomNavigation = !quizGameActive,
+                onOpenSettings = { navController.navigate(Routes.SETTINGS) },
+                updateAvailable = updateAvailable,
+                onOpenAssistant = {
+                    viewModel.openAssistant(null)
+                    navController.navigate(Routes.AI_ASSISTANT) { launchSingleTop = true }
+                },
                 dashboardContent = {
                     DashboardScreen(
                         decks = decks,
@@ -196,6 +205,7 @@ fun VocabApp(
                         onOpenCardList = { navController.navigate(Routes.CARD_LIST) },
                         onOpenSettings = { navController.navigate(Routes.SETTINGS) },
                         updateAvailable = updateAvailable,
+                        showTopBar = false,
                         onOpenExternalImport = { navController.navigate(Routes.EXTERNAL_IMPORT) },
                         onOpenAssistant = {
                             viewModel.openAssistant(selectedDeckId)
@@ -233,7 +243,8 @@ fun VocabApp(
                         onOpenAssistant = {
                             viewModel.openAssistant(null)
                             navController.navigate(Routes.AI_ASSISTANT) { launchSingleTop = true }
-                        }
+                        },
+                        showTopBar = false
                     )
                 },
                 studyContent = {
@@ -272,7 +283,8 @@ fun VocabApp(
                         onOpenAssistant = {
                             viewModel.openAssistant(null)
                             navController.navigate(Routes.AI_ASSISTANT) { launchSingleTop = true }
-                        }
+                        },
+                        showTopBar = false
                     )
                 },
                 quizContent = {
@@ -303,7 +315,8 @@ fun VocabApp(
                         onOpenAssistant = {
                             viewModel.openAssistant(null)
                             navController.navigate(Routes.AI_ASSISTANT) { launchSingleTop = true }
-                        }
+                        },
+                        showHubTopBar = false
                     )
                 }
             )
@@ -476,7 +489,7 @@ fun VocabApp(
                 settings = settings,
                 onBooleanChange = viewModel::updateBooleanSetting,
                 onIntChange = viewModel::updateIntSetting,
-                onReminderTimeChange = viewModel::updateReminderTime,
+                onReminderTimesChange = viewModel::updateReminderTimes,
                 onThemeChange = viewModel::updateThemeMode,
                 onThemeColorPresetChange = viewModel::updateThemeColorPreset,
                 onCustomThemeColorsChange = viewModel::updateCustomThemeColors,

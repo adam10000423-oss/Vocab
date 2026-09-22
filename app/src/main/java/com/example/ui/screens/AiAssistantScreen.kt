@@ -503,6 +503,7 @@ fun AiAssistantScreen(
     }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             if (!useLandscapeInputOverlay) TopAppBar(
                 title = {
@@ -799,9 +800,9 @@ private fun AssistantMessageBubble(
                 bottomStart = if (user) 18.dp else 5.dp,
                 bottomEnd = if (user) 5.dp else 18.dp
             ),
-            color = if (user) MaterialTheme.colorScheme.primary
-            else MaterialTheme.colorScheme.surfaceVariant,
-            contentColor = if (user) MaterialTheme.colorScheme.onPrimary
+            color = if (user) MaterialTheme.colorScheme.primaryContainer
+            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+            contentColor = if (user) MaterialTheme.colorScheme.onPrimaryContainer
             else MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.fillMaxWidth(
                 when {

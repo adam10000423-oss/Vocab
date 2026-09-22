@@ -51,6 +51,7 @@ class SettingsRepository(private val context: Context) {
         val remindersEnabled = booleanPreferencesKey("reminders_enabled")
         val reminderHour = intPreferencesKey("reminder_hour")
         val reminderMinute = intPreferencesKey("reminder_minute")
+        val reminderTimes = stringPreferencesKey("reminder_times")
         val gameMistakesToReview = booleanPreferencesKey("game_mistakes_to_review")
         val autoCheckUpdates = booleanPreferencesKey("auto_check_updates")
         val wifiOnlyUpdates = booleanPreferencesKey("wifi_only_updates")
@@ -58,6 +59,18 @@ class SettingsRepository(private val context: Context) {
     }
 
     val settings: Flow<AppSettings> = context.settingsDataStore.data.map { value ->
+        val legacyReminder = ReminderTime(
+            hour = (value[Keys.reminderHour] ?: 20).coerceIn(0, 23),
+            minute = (value[Keys.reminderMinute] ?: 0).coerceIn(0, 59)
+        )
+        val reminderTimes = value[Keys.reminderTimes]
+            ?.split(',')
+            ?.mapNotNull(::parseReminderTime)
+            ?.distinct()
+            ?.sorted()
+            ?.take(12)
+            ?.ifEmpty { null }
+            ?: listOf(legacyReminder)
         AppSettings(
             onboardingCompleted = value[Keys.onboardingCompleted] ?: false,
             dataInitialized = value[Keys.dataInitialized] ?: false,
@@ -94,6 +107,7 @@ class SettingsRepository(private val context: Context) {
             remindersEnabled = value[Keys.remindersEnabled] ?: false,
             reminderHour = (value[Keys.reminderHour] ?: 20).coerceIn(0, 23),
             reminderMinute = (value[Keys.reminderMinute] ?: 0).coerceIn(0, 59),
+            reminderTimes = reminderTimes,
             gameMistakesToReview = value[Keys.gameMistakesToReview] ?: true,
             autoCheckUpdates = value[Keys.autoCheckUpdates] ?: true,
             wifiOnlyUpdates = value[Keys.wifiOnlyUpdates] ?: true,
@@ -156,7 +170,7 @@ class SettingsRepository(private val context: Context) {
     suspend fun setFontAppearance(family: String, scale: Float) =
         context.settingsDataStore.edit {
             it[Keys.fontFamily] = family.takeIf { value ->
-                value in setOf("DEFAULT", "SERIF", "MONOSPACE")
+                value in setOf("DEFAULT", "ROUNDED", "SANS_SERIF", "SERIF", "CURSIVE", "MONOSPACE")
             } ?: "DEFAULT"
             it[Keys.fontScale] = scale.coerceIn(0.85f, 1.3f)
         }
@@ -197,6 +211,19 @@ class SettingsRepository(private val context: Context) {
     suspend fun setReminderTime(hour: Int, minute: Int) = context.settingsDataStore.edit {
         it[Keys.reminderHour] = hour.coerceIn(0, 23)
         it[Keys.reminderMinute] = minute.coerceIn(0, 59)
+        it[Keys.reminderTimes] = serializeReminderTimes(listOf(ReminderTime(hour, minute)))
+    }
+
+    suspend fun setReminderTimes(times: List<ReminderTime>) = context.settingsDataStore.edit {
+        val normalized = times
+            .map { ReminderTime(it.hour.coerceIn(0, 23), it.minute.coerceIn(0, 59)) }
+            .distinct()
+            .sorted()
+            .take(12)
+            .ifEmpty { listOf(ReminderTime(20, 0)) }
+        it[Keys.reminderTimes] = serializeReminderTimes(normalized)
+        it[Keys.reminderHour] = normalized.first().hour
+        it[Keys.reminderMinute] = normalized.first().minute
     }
 
     suspend fun setInt(name: String, number: Int) = context.settingsDataStore.edit {
@@ -217,6 +244,8 @@ class SettingsRepository(private val context: Context) {
             it[Keys.dailyGoalCards] = dailyGoalCards.coerceIn(5, 100)
             it[Keys.remindersEnabled] = remindersEnabled
             it[Keys.reminderHour] = reminderHour.coerceIn(0, 23)
+            it[Keys.reminderMinute] = 0
+            it[Keys.reminderTimes] = serializeReminderTimes(listOf(ReminderTime(reminderHour, 0)))
         }
 
     suspend fun markDataInitialized() = context.settingsDataStore.edit {
@@ -231,4 +260,16 @@ class SettingsRepository(private val context: Context) {
         it[Keys.dataInitialized] = true
         it[Keys.onboardingCompleted] = false
     }
+
+    private fun parseReminderTime(value: String): ReminderTime? {
+        val parts = value.split(':')
+        if (parts.size != 2) return null
+        val hour = parts[0].toIntOrNull() ?: return null
+        val minute = parts[1].toIntOrNull() ?: return null
+        if (hour !in 0..23 || minute !in 0..59) return null
+        return ReminderTime(hour, minute)
+    }
+
+    private fun serializeReminderTimes(times: List<ReminderTime>): String =
+        times.joinToString(",") { "%02d:%02d".format(it.hour, it.minute) }
 }

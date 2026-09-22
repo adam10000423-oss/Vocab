@@ -88,6 +88,7 @@ fun DashboardScreen(
     onOpenCardList: () -> Unit,
     onOpenSettings: () -> Unit,
     updateAvailable: Boolean = false,
+    showTopBar: Boolean = true,
     onOpenExternalImport: () -> Unit,
     onOpenAssistant: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -226,7 +227,7 @@ fun DashboardScreen(
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            TopAppBar(
+            if (showTopBar) TopAppBar(
                 expandedHeight = 48.dp,
                 windowInsets = WindowInsets(0, 0, 0, 0),
                 title = {
@@ -387,11 +388,16 @@ fun DashboardScreen(
                             )
                         }
 
-                        androidx.compose.material3.TextButton(
+                        IconButton(
                             onClick = { showAddFolderDialog = true },
-                            modifier = Modifier.testTag("dashboard_add_folder_button")
+                            modifier = Modifier
+                                .size(40.dp)
+                                .testTag("dashboard_add_folder_button")
                         ) {
-                            Text("新增", fontWeight = FontWeight.Bold)
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = "新增資料夾"
+                            )
                         }
                     }
 

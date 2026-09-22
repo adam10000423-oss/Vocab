@@ -69,6 +69,7 @@ fun StudyHubScreen(
     onManageDeck: (Long) -> Unit = {},
     onQuizDeck: (Long) -> Unit = {},
     onOpenAssistant: () -> Unit = {},
+    showTopBar: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val courses = remember(decks) { decks.map { it.category }.distinct() }
@@ -84,7 +85,7 @@ fun StudyHubScreen(
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            TopAppBar(
+            if (showTopBar) TopAppBar(
                 expandedHeight = 48.dp,
                 windowInsets = WindowInsets(0, 0, 0, 0),
                 title = {
