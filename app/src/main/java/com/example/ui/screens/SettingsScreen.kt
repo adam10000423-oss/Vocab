@@ -115,6 +115,7 @@ fun SettingsScreen(
     aiConnectionStatus: String?,
     onAiProviderChange: (String) -> Unit,
     onAiModelChange: (String) -> Unit,
+    onAiChatStyleChange: (String) -> Unit,
     onAiPromptChange: (String) -> Unit,
     onResetAiPrompt: () -> Unit,
     onAiImagePromptChange: (String) -> Unit,
@@ -587,6 +588,28 @@ fun SettingsScreen(
                                 onAiModelChange(it)
                             }
                         }
+                    )
+                    SettingDropdown(
+                        label = "聊天風格",
+                        value = settings.aiChatStyle,
+                        options = listOf("NORMAL", "RELAXED", "STRICT"),
+                        optionText = {
+                            when (it) {
+                                "RELAXED" -> "輕鬆"
+                                "STRICT" -> "嚴謹"
+                                else -> "一般"
+                            }
+                        },
+                        onSelected = onAiChatStyleChange
+                    )
+                    Text(
+                        when (settings.aiChatStyle) {
+                            "RELAXED" -> "語氣自然輕鬆，也能聊英文學習以外的日常話題。"
+                            "STRICT" -> "只處理英文學習、單字庫與相關知識；不相關話題會禮貌拒絕，回答也會更審慎。"
+                            else -> "一般助理語氣，兼顧清楚、自然與實用性。"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     if (customModelInput || settings.aiModel !in modelOptions) {
                         OutlinedTextField(

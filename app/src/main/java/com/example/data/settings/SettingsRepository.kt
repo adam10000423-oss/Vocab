@@ -40,6 +40,7 @@ class SettingsRepository(private val context: Context) {
         val usePersonalAiApi = booleanPreferencesKey("use_personal_ai_api")
         val aiProvider = stringPreferencesKey("ai_provider")
         val aiModel = stringPreferencesKey("ai_model")
+        val aiChatStyle = stringPreferencesKey("ai_chat_style")
         val aiWordPrompt = stringPreferencesKey("ai_word_prompt")
         val aiImagePrompt = stringPreferencesKey("ai_image_prompt")
         val ocrPreviewBeforeImport = booleanPreferencesKey("ocr_preview_before_import")
@@ -96,6 +97,9 @@ class SettingsRepository(private val context: Context) {
             usePersonalAiApi = value[Keys.usePersonalAiApi] ?: false,
             aiProvider = value[Keys.aiProvider] ?: "GEMINI",
             aiModel = value[Keys.aiModel] ?: "gemini-3.6-flash",
+            aiChatStyle = value[Keys.aiChatStyle]
+                ?.takeIf { it in setOf("NORMAL", "RELAXED", "STRICT") }
+                ?: "NORMAL",
             aiWordPrompt = value[Keys.aiWordPrompt] ?: AiPromptDefaults.WORD_DETAILS,
             aiImagePrompt = value[Keys.aiImagePrompt] ?: AiPromptDefaults.IMAGE_VOCABULARY_EXTRACTION,
             ocrPreviewBeforeImport = value[Keys.ocrPreviewBeforeImport] ?: true,
@@ -183,6 +187,12 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setAiModel(model: String) = context.settingsDataStore.edit {
         it[Keys.aiModel] = model.trim().take(120)
+    }
+
+    suspend fun setAiChatStyle(style: String) = context.settingsDataStore.edit {
+        it[Keys.aiChatStyle] = style.takeIf {
+            value -> value in setOf("NORMAL", "RELAXED", "STRICT")
+        } ?: "NORMAL"
     }
 
     suspend fun setAiWordPrompt(prompt: String) = context.settingsDataStore.edit {

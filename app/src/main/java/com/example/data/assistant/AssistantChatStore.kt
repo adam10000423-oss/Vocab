@@ -41,7 +41,14 @@ class AssistantChatStore(context: Context) {
                         content = item.optString("content").take(MAX_MESSAGE_CONTENT),
                         createdAt = item.optLong("createdAt"),
                         kind = item.optString("kind", "TEXT"),
-                        payload = item.optString("payload").take(MAX_MESSAGE_PAYLOAD)
+                        payload = item.optString("payload").take(MAX_MESSAGE_PAYLOAD),
+                        attachmentUris = item.optJSONArray("attachmentUris")?.let { uris ->
+                            buildList {
+                                for (uriIndex in 0 until minOf(uris.length(), MAX_ATTACHMENTS_PER_MESSAGE)) {
+                                    uris.optString(uriIndex).takeIf(String::isNotBlank)?.let(::add)
+                                }
+                            }
+                        }.orEmpty()
                     )
                 )
             }
@@ -83,6 +90,7 @@ class AssistantChatStore(context: Context) {
                         .put("createdAt", message.createdAt)
                         .put("kind", message.kind)
                         .put("payload", message.payload)
+                        .put("attachmentUris", JSONArray(message.attachmentUris.take(MAX_ATTACHMENTS_PER_MESSAGE)))
                 )
             }
         }
@@ -103,5 +111,6 @@ class AssistantChatStore(context: Context) {
         private const val MAX_MESSAGES = 2_000
         private const val MAX_MESSAGE_CONTENT = 40_000
         private const val MAX_MESSAGE_PAYLOAD = 500_000
+        private const val MAX_ATTACHMENTS_PER_MESSAGE = 5
     }
 }

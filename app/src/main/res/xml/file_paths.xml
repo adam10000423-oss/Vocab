@@ -6,4 +6,7 @@
     <files-path
         name="downloaded_updates"
         path="updates/" />
+    <files-path
+        name="assistant_images"
+        path="assistant_images/" />
 </paths>

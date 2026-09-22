@@ -509,6 +509,7 @@ fun VocabApp(
                 aiConnectionStatus = aiConnectionStatus,
                 onAiProviderChange = viewModel::updateAiProvider,
                 onAiModelChange = viewModel::updateAiModel,
+                onAiChatStyleChange = viewModel::updateAiChatStyle,
                 onAiPromptChange = viewModel::updateAiWordPrompt,
                 onResetAiPrompt = viewModel::resetAiWordPrompt,
                 onAiImagePromptChange = viewModel::updateAiImagePrompt,

@@ -15,7 +15,8 @@ data class AssistantMessage(
     val content: String,
     val createdAt: Long,
     val kind: String = "TEXT",
-    val payload: String = ""
+    val payload: String = "",
+    val attachmentUris: List<String> = emptyList()
 )
 
 data class AssistantPendingAction(
@@ -37,4 +38,3 @@ data class AssistantQuizQuestion(
     val explanation: String,
     val options: List<AssistantQuizOption>
 )
-

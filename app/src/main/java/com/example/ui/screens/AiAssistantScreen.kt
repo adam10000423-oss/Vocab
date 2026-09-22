@@ -5,6 +5,8 @@ import android.app.Activity
 import android.content.Intent
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.ClipData
+import android.widget.Toast
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -29,6 +31,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -84,6 +87,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -116,6 +120,8 @@ import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
 import java.io.File
 import kotlinx.coroutines.delay
+import coil.compose.AsyncImage
+import androidx.compose.ui.window.Dialog
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -158,6 +164,7 @@ fun AiAssistantScreen(
     var attachments by remember { mutableStateOf<List<Uri>>(emptyList()) }
     var showAttachmentSources by remember { mutableStateOf(false) }
     var attachmentError by remember { mutableStateOf<String?>(null) }
+    var previewImageUri by remember { mutableStateOf<Uri?>(null) }
     var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
     val filePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenMultipleDocuments()
@@ -250,6 +257,14 @@ fun AiAssistantScreen(
             title = { Text("無法加入附件") },
             text = { Text(error) },
             confirmButton = { TextButton(onClick = { attachmentError = null }) { Text("確定") } }
+        )
+    }
+
+    previewImageUri?.let { uri ->
+        AssistantImagePreviewDialog(
+            uri = uri,
+            onCopy = { copyAssistantImage(context, uri) },
+            onDismiss = { previewImageUri = null }
         )
     }
 
@@ -577,7 +592,8 @@ fun AiAssistantScreen(
                             message = message,
                             onQuizCompleted = onQuizCompleted,
                             onQuizRestart = onQuizRestart,
-                            onOpenQuiz = { activeQuizMessageId = message.id }
+                            onOpenQuiz = { activeQuizMessageId = message.id },
+                            onPreviewImage = { previewImageUri = it }
                         )
                     }
                     if (busy) {
@@ -611,33 +627,17 @@ fun AiAssistantScreen(
                     .navigationBarsPadding(),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                if (!useLandscapeInputOverlay && attachments.isNotEmpty()) {
+                if (attachments.isNotEmpty()) {
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         attachments.forEach { uri ->
-                            Surface(
-                                shape = RoundedCornerShape(10.dp),
-                                color = MaterialTheme.colorScheme.secondaryContainer
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(start = 8.dp, end = 2.dp, top = 3.dp, bottom = 3.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        uri.lastPathSegment?.substringAfterLast('/')?.take(22) ?: "附件",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        maxLines = 1
-                                    )
-                                    IconButton(
-                                        onClick = { attachments = attachments - uri },
-                                        modifier = Modifier.size(28.dp)
-                                    ) {
-                                        Icon(Icons.Default.Close, contentDescription = "移除附件", modifier = Modifier.size(16.dp))
-                                    }
-                                }
-                            }
+                            AssistantPendingAttachment(
+                                uri = uri,
+                                onPreview = { previewImageUri = uri },
+                                onRemove = { attachments = attachments - uri }
+                            )
                         }
                     }
                 }
@@ -780,11 +780,179 @@ private fun AttachmentSourceButton(
 }
 
 @Composable
+private fun AssistantPendingAttachment(
+    uri: Uri,
+    onPreview: () -> Unit,
+    onRemove: () -> Unit
+) {
+    val context = LocalContext.current
+    val image = remember(uri) { isAssistantImage(context, uri) }
+    if (!image) {
+        Surface(
+            shape = RoundedCornerShape(10.dp),
+            color = MaterialTheme.colorScheme.secondaryContainer
+        ) {
+            Row(
+                modifier = Modifier.padding(start = 8.dp, end = 2.dp, top = 3.dp, bottom = 3.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    uri.lastPathSegment?.substringAfterLast('/')?.take(22) ?: "附件",
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1
+                )
+                IconButton(onClick = onRemove, modifier = Modifier.size(28.dp)) {
+                    Icon(Icons.Default.Close, contentDescription = "移除附件", modifier = Modifier.size(16.dp))
+                }
+            }
+        }
+        return
+    }
+    Box(modifier = Modifier.size(76.dp)) {
+        Surface(
+            onClick = onPreview,
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            modifier = Modifier.fillMaxSize()
+        ) {
+            AsyncImage(
+                model = uri,
+                contentDescription = "預覽圖片",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+        Surface(
+            onClick = onRemove,
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.align(Alignment.TopEnd).size(26.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(Icons.Default.Close, contentDescription = "移除圖片", modifier = Modifier.size(16.dp))
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AssistantSentAttachments(
+    uris: List<Uri>,
+    onPreviewImage: (Uri) -> Unit
+) {
+    val context = LocalContext.current
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
+        verticalArrangement = Arrangement.spacedBy(7.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        uris.forEach { uri ->
+            if (isAssistantImage(context, uri)) {
+                Surface(
+                    onClick = { onPreviewImage(uri) },
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier.size(92.dp)
+                ) {
+                    AsyncImage(
+                        model = uri,
+                        contentDescription = "訊息圖片",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            } else {
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.secondaryContainer
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.InsertDriveFile, contentDescription = null, modifier = Modifier.size(17.dp))
+                        Spacer(Modifier.size(5.dp))
+                        Text(
+                            uri.lastPathSegment?.substringAfterLast('/')?.take(24) ?: "附件",
+                            style = MaterialTheme.typography.labelSmall,
+                            maxLines = 1
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AssistantImagePreviewDialog(
+    uri: Uri,
+    onCopy: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(22.dp),
+            color = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                AsyncImage(
+                    model = uri,
+                    contentDescription = "放大圖片",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 220.dp, max = 620.dp)
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onCopy) {
+                        Icon(Icons.Default.ContentCopy, contentDescription = null)
+                        Text("複製圖片")
+                    }
+                    TextButton(onClick = onDismiss) { Text("關閉") }
+                }
+            }
+        }
+    }
+}
+
+private fun isAssistantImage(context: Context, uri: Uri): Boolean {
+    val mime = runCatching { context.contentResolver.getType(uri) }.getOrNull().orEmpty()
+    if (mime.startsWith("image/", ignoreCase = true)) return true
+    val path = uri.lastPathSegment.orEmpty().lowercase()
+    return listOf(".jpg", ".jpeg", ".png", ".webp", ".gif", ".heic", ".heif")
+        .any(path::endsWith)
+}
+
+private fun copyAssistantImage(context: Context, uri: Uri) {
+    runCatching {
+        val copyUri = if (uri.scheme == "file") {
+            val file = uri.path?.let(::File) ?: error("圖片位置無效")
+            FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        } else uri
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newUri(context.contentResolver, "Vocab 圖片", copyUri))
+        Toast.makeText(context, "已複製圖片", Toast.LENGTH_SHORT).show()
+    }.onFailure {
+        Toast.makeText(context, "無法複製圖片", Toast.LENGTH_SHORT).show()
+    }
+}
+
+@Composable
 private fun AssistantMessageBubble(
     message: AssistantMessage,
     onQuizCompleted: (String, Int, Int) -> Unit,
     onQuizRestart: (String) -> Unit,
-    onOpenQuiz: () -> Unit
+    onOpenQuiz: () -> Unit,
+    onPreviewImage: (Uri) -> Unit
 ) {
     val user = message.role == "USER"
     val clipboard = LocalClipboardManager.current
@@ -816,6 +984,12 @@ private fun AssistantMessageBubble(
                 modifier = Modifier.padding(13.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                if (message.attachmentUris.isNotEmpty()) {
+                    AssistantSentAttachments(
+                        uris = message.attachmentUris.map(Uri::parse),
+                        onPreviewImage = onPreviewImage
+                    )
+                }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically

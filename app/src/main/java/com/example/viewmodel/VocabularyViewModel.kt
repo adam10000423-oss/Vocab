@@ -58,6 +58,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import java.util.UUID
 
 sealed interface ImportUiState {
@@ -579,6 +580,10 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
+    fun updateAiChatStyle(style: String) {
+        viewModelScope.launch { settingsRepository.setAiChatStyle(style) }
+    }
+
     fun savePersonalApiKey(apiKey: String) {
         viewModelScope.launch(Dispatchers.IO) {
             runCatching {
@@ -1050,6 +1055,9 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun deleteAssistantConversation(conversationId: String) {
+        assistantAllMessages.filter { it.conversationId == conversationId }
+            .flatMap { it.attachmentUris }
+            .forEach(::deletePersistedAssistantAttachment)
         assistantAllMessages.removeAll { it.conversationId == conversationId }
         _assistantConversations.value = _assistantConversations.value.filterNot { it.id == conversationId }
         if (_assistantCurrentConversationId.value == conversationId) {
@@ -1061,6 +1069,8 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun clearAssistantChats() {
+        assistantAllMessages.flatMap { it.attachmentUris }
+            .forEach(::deletePersistedAssistantAttachment)
         assistantAllMessages.clear()
         _assistantConversations.value = emptyList()
         _assistantCurrentConversationId.value = null
@@ -1069,6 +1079,18 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
         _assistantUndoAction.value = null
         assistantChatStore.clear()
         newAssistantConversation(false)
+    }
+
+    private fun deletePersistedAssistantAttachment(rawUri: String) {
+        val uri = runCatching { Uri.parse(rawUri) }.getOrNull() ?: return
+        if (uri.scheme != "file") return
+        val file = uri.path?.let(::File) ?: return
+        val attachmentDirectory = File(
+            getApplication<Application>().filesDir,
+            "assistant_images"
+        ).canonicalFile
+        val target = runCatching { file.canonicalFile }.getOrNull() ?: return
+        if (target.parentFile == attachmentDirectory) target.delete()
     }
 
     fun sendAssistantMessage(text: String, attachments: List<Uri> = emptyList()) {
@@ -1082,11 +1104,10 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
         if ((request.isBlank() && safeAttachments.isEmpty()) || _assistantBusy.value) return
         if (_assistantCurrentConversationId.value == null) newAssistantConversation(false)
         val conversationId = _assistantCurrentConversationId.value ?: return
-        appendAssistantMessage(
+        val userMessageId = appendAssistantMessage(
             "USER",
-            request + if (attachmentLabels.isNotEmpty()) {
-                "\n附件：${attachmentLabels.joinToString("、")}" 
-            } else ""
+            request,
+            attachmentUris = safeAttachments.map(Uri::toString)
         )
         updateAssistantConversationTitle(conversationId, request)
 
@@ -1115,6 +1136,12 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
             _assistantSendOutcome.value = null
             _assistantStatus.value = if (safeAttachments.isEmpty()) null else "正在準備附件…"
             runCatching {
+                if (safeAttachments.isNotEmpty()) {
+                    val persistedUris = withContext(Dispatchers.IO) {
+                        persistAssistantAttachments(safeAttachments)
+                    }
+                    updateAssistantMessageAttachments(userMessageId, persistedUris)
+                }
                 if (!settings.value.aiEnabled || !settings.value.usePersonalAiApi) {
                     error("請先在設定中啟用 AI，並加入至少一組可用的 API Key")
                 }
@@ -1217,6 +1244,38 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
         return displayName?.trim()?.take(120)?.takeIf { it.isNotBlank() }
             ?: uri.lastPathSegment?.substringAfterLast('/')?.take(120)
             ?: "附件 ${index + 1}"
+    }
+
+    private fun persistAssistantAttachments(uris: List<Uri>): List<String> {
+        val application = getApplication<Application>()
+        val resolver = application.contentResolver
+        val imageDirectory = File(application.filesDir, "assistant_images").apply { mkdirs() }
+        return uris.map { uri ->
+            val mimeType = resolver.getType(uri).orEmpty().lowercase()
+            if (!mimeType.startsWith("image/")) return@map uri.toString()
+            runCatching {
+                val extension = when (mimeType) {
+                    "image/png" -> "png"
+                    "image/webp" -> "webp"
+                    "image/gif" -> "gif"
+                    "image/heic", "image/heif" -> "heic"
+                    else -> "jpg"
+                }
+                val target = File(imageDirectory, "${UUID.randomUUID()}.$extension")
+                resolver.openInputStream(uri)?.use { input ->
+                    target.outputStream().use(input::copyTo)
+                } ?: error("無法保存圖片附件")
+                Uri.fromFile(target).toString()
+            }.getOrDefault(uri.toString())
+        }
+    }
+
+    private fun updateAssistantMessageAttachments(messageId: String, uris: List<String>) {
+        val index = assistantAllMessages.indexOfFirst { it.id == messageId }
+        if (index < 0) return
+        assistantAllMessages[index] = assistantAllMessages[index].copy(attachmentUris = uris)
+        refreshAssistantMessages()
+        persistAssistantState()
     }
 
     fun stopAssistantRequest() {
@@ -2124,9 +2183,23 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
             }.sortedByDescending { it.optInt("lowRatings") }.take(40)
         val selectedIds = _assistantSelectedDeckIds.value
         val selectedDecks = allDecks.value.filter { it.id in selectedIds }
+        val chatStyleInstruction = when (settings.value.aiChatStyle) {
+            "RELAXED" -> """
+                目前聊天風格是「輕鬆」。用自然、親切、像熟悉朋友般的繁體中文交談，可以適度幽默；
+                使用者可以聊生活、興趣或其他日常話題，不必強行把內容拉回英文，但事實仍須可靠，不能捏造。
+            """.trimIndent()
+            "STRICT" -> """
+                目前聊天風格是「嚴謹」。只回答英文學習、語言知識、單字卡、學習規劃與 Vocab App 操作相關內容；
+                對無關的閒聊或其他領域要求要簡短、禮貌拒絕。回答前要審慎辨別不確定性，沒有可靠依據就明確說明，禁止猜測。
+            """.trimIndent()
+            else -> """
+                目前聊天風格是「一般」。使用清楚、自然、友善的繁體中文回答，資訊不足時先詢問，避免武斷或過度冗長。
+            """.trimIndent()
+        }
         return """
             你是 Vocab App 內的繁體中文 AI 助手。一般英文學習與知識問題可以使用你的可靠知識回答；
             涉及使用者 App 內實際有哪些資料時，只能根據下方提供的真實資料，不可捏造，也不可聲稱已修改資料。
+            $chatStyleInstruction
             App 會在使用者確認後執行寫入。整體只回傳一個 JSON 物件，不可加 Markdown 程式碼圍欄。
             message、article、analysis 與 explanation 等文字欄位可以使用精簡 Markdown：
             #～### 標題、**粗體**、- 條列、1. 編號、行內公式 $...$、獨立公式 $$...$$。
@@ -2391,24 +2464,28 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
         role: String,
         content: String,
         kind: String = "TEXT",
-        payload: String = ""
-    ) {
-        val conversationId = _assistantCurrentConversationId.value ?: return
+        payload: String = "",
+        attachmentUris: List<String> = emptyList()
+    ): String {
+        val conversationId = _assistantCurrentConversationId.value ?: return ""
         val now = System.currentTimeMillis()
+        val messageId = UUID.randomUUID().toString()
         assistantAllMessages += AssistantMessage(
-            id = UUID.randomUUID().toString(),
+            id = messageId,
             conversationId = conversationId,
             role = role,
             content = content.trim(),
             createdAt = now,
             kind = kind,
-            payload = payload
+            payload = payload,
+            attachmentUris = attachmentUris.take(5)
         )
         _assistantConversations.value = _assistantConversations.value.map {
             if (it.id == conversationId) it.copy(updatedAt = now) else it
         }.sortedByDescending { it.updatedAt }
         refreshAssistantMessages()
         persistAssistantState()
+        return messageId
     }
 
     private fun updateAssistantConversationTitle(conversationId: String, firstMessage: String) {
