@@ -26,6 +26,7 @@ data class AppSettings(
     val gradientStartColor: String = "#DFF5EC",
     val gradientEndColor: String = "#DCEBFA",
     val fontFamily: String = "DEFAULT",
+    val englishFontFamily: String = "DEFAULT",
     val fontScale: Float = 1f,
     val customTextColorEnabled: Boolean = false,
     val customTextColor: String = "#202522",

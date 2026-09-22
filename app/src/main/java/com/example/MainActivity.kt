@@ -71,6 +71,7 @@ class MainActivity : ComponentActivity() {
                 gradientStartColor = settings.gradientStartColor,
                 gradientEndColor = settings.gradientEndColor,
                 fontFamilyName = settings.fontFamily,
+                englishFontFamilyName = settings.englishFontFamily,
                 fontScale = settings.fontScale,
                 customTextColorEnabled = settings.customTextColorEnabled,
                 customTextColor = settings.customTextColor

@@ -1,6 +1,8 @@
 package com.example.ui.theme
 
+import android.content.Context
 import android.graphics.Typeface
+import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -8,10 +10,14 @@ import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.res.ResourcesCompat
+import com.example.R
 
 private val AppShapes = Shapes(
     extraSmall = RoundedCornerShape(8.dp),
@@ -68,6 +74,7 @@ fun MyApplicationTheme(
     gradientStartColor: String = "#DFF5EC",
     gradientEndColor: String = "#DCEBFA",
     fontFamilyName: String = "DEFAULT",
+    englishFontFamilyName: String = "DEFAULT",
     fontScale: Float = 1f,
     customTextColorEnabled: Boolean = false,
     customTextColor: String = "#202522",
@@ -179,13 +186,9 @@ fun MyApplicationTheme(
             onErrorContainer = textOn(errorContainer, Color(0xFF410002))
         )
     }
-    val family = when (fontFamilyName) {
-        "ROUNDED" -> FontFamily(Typeface.create("sans-serif-rounded", Typeface.NORMAL))
-        "SANS_SERIF" -> FontFamily.SansSerif
-        "SERIF" -> FontFamily.Serif
-        "CURSIVE" -> FontFamily.Cursive
-        "MONOSPACE" -> FontFamily.Monospace
-        else -> FontFamily.Default
+    val context = LocalContext.current
+    val family = remember(fontFamilyName, englishFontFamilyName) {
+        mixedLanguageFontFamily(context, fontFamilyName, englishFontFamilyName)
     }
 
     MaterialTheme(
@@ -194,6 +197,47 @@ fun MyApplicationTheme(
         shapes = AppShapes,
         content = content
     )
+}
+
+private fun mixedLanguageFontFamily(
+    context: Context,
+    chineseFamilyName: String,
+    englishFamilyName: String
+): FontFamily {
+    val chineseRes = when (chineseFamilyName) {
+        "ROUNDED" -> R.font.huninn_regular
+        "SERIF" -> R.font.noto_serif_tc
+        "CURSIVE" -> R.font.iansui_regular
+        "MONOSPACE" -> R.font.noto_sans_mono_cjk_tc_regular
+        else -> R.font.noto_sans_tc
+    }
+    val englishRes = when (englishFamilyName) {
+        "INTER" -> R.font.inter
+        "NUNITO" -> R.font.nunito
+        "PLAYFAIR" -> R.font.playfair_display
+        "CAVEAT" -> R.font.caveat
+        "JETBRAINS_MONO" -> R.font.jetbrains_mono
+        else -> R.font.roboto
+    }
+
+    val typeface = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        val english = android.graphics.fonts.FontFamily.Builder(
+            android.graphics.fonts.Font.Builder(context.resources, englishRes).build()
+        ).build()
+        val chinese = android.graphics.fonts.FontFamily.Builder(
+            android.graphics.fonts.Font.Builder(context.resources, chineseRes).build()
+        ).build()
+        Typeface.CustomFallbackBuilder(english)
+            .addCustomFallback(chinese)
+            .setSystemFallback("sans-serif")
+            .build()
+    } else {
+        // Custom per-script fallback is available from Android 10. Older
+        // versions still honor the selected Chinese family and use its Latin
+        // glyphs, so text remains complete and readable.
+        ResourcesCompat.getFont(context, chineseRes) ?: Typeface.DEFAULT
+    }
+    return FontFamily(typeface)
 }
 
 private fun themeSeeds(

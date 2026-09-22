@@ -539,8 +539,10 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
-    fun updateFontAppearance(family: String, scale: Float) {
-        viewModelScope.launch { settingsRepository.setFontAppearance(family, scale) }
+    fun updateFontAppearance(chineseFamily: String, englishFamily: String, scale: Float) {
+        viewModelScope.launch {
+            settingsRepository.setFontAppearance(chineseFamily, englishFamily, scale)
+        }
     }
 
     fun updateSpeechRate(rate: Float) {

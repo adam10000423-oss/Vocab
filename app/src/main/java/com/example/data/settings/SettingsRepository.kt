@@ -29,6 +29,7 @@ class SettingsRepository(private val context: Context) {
         val gradientStartColor = stringPreferencesKey("gradient_start_color")
         val gradientEndColor = stringPreferencesKey("gradient_end_color")
         val fontFamily = stringPreferencesKey("font_family")
+        val englishFontFamily = stringPreferencesKey("english_font_family")
         val fontScale = floatPreferencesKey("font_scale")
         val customTextColorEnabled = booleanPreferencesKey("custom_text_color_enabled")
         val customTextColor = stringPreferencesKey("custom_text_color")
@@ -86,6 +87,7 @@ class SettingsRepository(private val context: Context) {
             gradientStartColor = value[Keys.gradientStartColor] ?: "#DFF5EC",
             gradientEndColor = value[Keys.gradientEndColor] ?: "#DCEBFA",
             fontFamily = value[Keys.fontFamily] ?: "DEFAULT",
+            englishFontFamily = value[Keys.englishFontFamily] ?: "DEFAULT",
             fontScale = (value[Keys.fontScale] ?: 1f).coerceIn(0.85f, 1.3f),
             customTextColorEnabled = value[Keys.customTextColorEnabled] ?: false,
             customTextColor = value[Keys.customTextColor] ?: "#202522",
@@ -171,10 +173,13 @@ class SettingsRepository(private val context: Context) {
             it[Keys.backgroundOpacity] = opacity.coerceIn(0.55f, 1f)
         }
 
-    suspend fun setFontAppearance(family: String, scale: Float) =
+    suspend fun setFontAppearance(chineseFamily: String, englishFamily: String, scale: Float) =
         context.settingsDataStore.edit {
-            it[Keys.fontFamily] = family.takeIf { value ->
+            it[Keys.fontFamily] = chineseFamily.takeIf { value ->
                 value in setOf("DEFAULT", "ROUNDED", "SANS_SERIF", "SERIF", "CURSIVE", "MONOSPACE")
+            } ?: "DEFAULT"
+            it[Keys.englishFontFamily] = englishFamily.takeIf { value ->
+                value in setOf("DEFAULT", "INTER", "NUNITO", "PLAYFAIR", "CAVEAT", "JETBRAINS_MONO")
             } ?: "DEFAULT"
             it[Keys.fontScale] = scale.coerceIn(0.85f, 1.3f)
         }

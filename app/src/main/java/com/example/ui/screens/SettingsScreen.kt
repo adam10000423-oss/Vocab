@@ -102,7 +102,7 @@ fun SettingsScreen(
     onGradientColorsChange: (String, String) -> Unit,
     onCustomTextColorChange: (String) -> Unit,
     onBackgroundAppearanceChange: (Float, Float) -> Unit,
-    onFontAppearanceChange: (String, Float) -> Unit,
+    onFontAppearanceChange: (String, String, Float) -> Unit,
     onSpeechRateChange: (Float) -> Unit,
     ttsVoices: List<TtsVoiceOption>,
     onTtsVoiceStyleChange: (String) -> Unit,
@@ -413,7 +413,7 @@ fun SettingsScreen(
                         valueRange = 0.55f..1f
                     )
                     SettingDropdown(
-                        label = "字體",
+                        label = "中文字體",
                         value = settings.fontFamily,
                         options = listOf("DEFAULT", "ROUNDED", "SANS_SERIF", "SERIF", "CURSIVE", "MONOSPACE"),
                         optionText = {
@@ -426,14 +426,38 @@ fun SettingsScreen(
                                 else -> "系統字體"
                             }
                         },
-                        onSelected = { onFontAppearanceChange(it, settings.fontScale) }
+                        onSelected = {
+                            onFontAppearanceChange(it, settings.englishFontFamily, settings.fontScale)
+                        }
+                    )
+                    SettingDropdown(
+                        label = "英文字體",
+                        value = settings.englishFontFamily,
+                        options = listOf("DEFAULT", "INTER", "NUNITO", "PLAYFAIR", "CAVEAT", "JETBRAINS_MONO"),
+                        optionText = {
+                            when (it) {
+                                "INTER" -> "Inter・清晰現代"
+                                "NUNITO" -> "Nunito・柔和圓潤"
+                                "PLAYFAIR" -> "Playfair・優雅襯線"
+                                "CAVEAT" -> "Caveat・自然手寫"
+                                "JETBRAINS_MONO" -> "JetBrains Mono・俐落等寬"
+                                else -> "Roboto・系統風格"
+                            }
+                        },
+                        onSelected = {
+                            onFontAppearanceChange(settings.fontFamily, it, settings.fontScale)
+                        }
                     )
                     Text("字體大小 ${(fontScaleInput * 100).toInt()}%")
                     Slider(
                         value = fontScaleInput,
                         onValueChange = { fontScaleInput = it },
                         onValueChangeFinished = {
-                            onFontAppearanceChange(settings.fontFamily, fontScaleInput)
+                            onFontAppearanceChange(
+                                settings.fontFamily,
+                                settings.englishFontFamily,
+                                fontScaleInput
+                            )
                         },
                         valueRange = 0.85f..1.3f
                     )
