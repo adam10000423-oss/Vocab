@@ -37,6 +37,8 @@ import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.ExternalImportScreen
 import com.example.ui.screens.OnboardingGoalScreen
 import com.example.ui.screens.AiAssistantScreen
+import com.example.ui.screens.StudyCalendarScreen
+import com.example.ui.screens.VocabularyQualityScreen
 import com.example.viewmodel.VocabularyViewModel
 import com.example.util.GitHubUpdateManager
 import com.example.util.UpdateCheckResult
@@ -51,6 +53,8 @@ object Routes {
     const val SETTINGS = "settings"
     const val EXTERNAL_IMPORT = "external_import"
     const val AI_ASSISTANT = "ai_assistant"
+    const val STUDY_CALENDAR = "study_calendar"
+    const val QUALITY_CHECK = "quality_check"
 }
 
 @Composable
@@ -88,6 +92,7 @@ fun VocabApp(
     val assistantUndoAction by viewModel.assistantUndoAction.collectAsStateWithLifecycle()
     val assistantSelectedDeckIds by viewModel.assistantSelectedDeckIds.collectAsStateWithLifecycle()
     val pronunciationWeakCardIds by viewModel.pronunciationWeakCardIds.collectAsStateWithLifecycle()
+    val studyCheckInDates by viewModel.studyCheckInDates.collectAsStateWithLifecycle()
 
     var currentTab by remember { mutableIntStateOf(0) }
     var editingCard by remember { mutableStateOf<Flashcard?>(null) }
@@ -175,6 +180,7 @@ fun VocabApp(
                         masteredCount = masteredCount,
                         dueCount = dueCount,
                         logs = logs,
+                        makeUpDates = studyCheckInDates,
                         dailyGoalCards = settings.dailyGoalCards,
                         selectedDeckId = selectedDeckId,
                         onSelectDeck = { id ->
@@ -208,6 +214,16 @@ fun VocabApp(
                         updateAvailable = updateAvailable,
                         showTopBar = false,
                         onOpenExternalImport = { navController.navigate(Routes.EXTERNAL_IMPORT) },
+                        onStartInteractiveReading = { deckId ->
+                            val deckName = decks.firstOrNull { it.id == deckId }?.name ?: "指定資料夾"
+                            viewModel.openAssistant(deckId)
+                            navController.navigate(Routes.AI_ASSISTANT) { launchSingleTop = true }
+                            viewModel.sendAssistantMessage(
+                                "請根據資料夾「$deckName」產生一篇自然的互動閱讀文章，盡量使用資料夾內的目標單字，並附完整繁體中文翻譯、逐句翻譯與 5 題閱讀測驗。"
+                            )
+                        },
+                        onOpenStudyCalendar = { navController.navigate(Routes.STUDY_CALENDAR) },
+                        onOpenQualityCheck = { navController.navigate(Routes.QUALITY_CHECK) },
                         onOpenAssistant = {
                             viewModel.openAssistant(selectedDeckId)
                             navController.navigate(Routes.AI_ASSISTANT) { launchSingleTop = true }
@@ -398,6 +414,8 @@ fun VocabApp(
                 onStopSpeaking = viewModel::stopSpeaking,
                 onPronunciationResult = viewModel::recordPronunciationResult,
                 onReadingMistake = viewModel::recordReadingMistake,
+                onCopyReadingCard = viewModel::copyCardToDeck,
+                onCreateFolderAndCopyReadingCard = viewModel::createFolderAndCopyCard,
                 onConfirmAction = viewModel::confirmAssistantAction,
                 onCancelAction = viewModel::cancelAssistantAction,
                 onUndoAction = viewModel::undoAssistantAction,
@@ -406,6 +424,35 @@ fun VocabApp(
                 onDeleteConversation = viewModel::deleteAssistantConversation,
                 onClearChats = viewModel::clearAssistantChats,
                 onOpenSettings = { navController.navigate(Routes.SETTINGS) },
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Routes.STUDY_CALENDAR) {
+            StudyCalendarScreen(
+                logs = logs,
+                dailyGoalCards = settings.dailyGoalCards,
+                makeUpDates = studyCheckInDates,
+                onToggleMakeUp = viewModel::toggleStudyCheckIn,
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Routes.QUALITY_CHECK) {
+            VocabularyQualityScreen(
+                cards = allCards,
+                decks = decks,
+                onEditCard = { card ->
+                    editingCard = card
+                    navController.navigate(Routes.ADD_EDIT_CARD)
+                },
+                onRunAiAudit = {
+                    viewModel.openAssistant(null)
+                    navController.navigate(Routes.AI_ASSISTANT) { launchSingleTop = true }
+                    viewModel.sendAssistantMessage(
+                        "請對我的單字庫執行完整資料品質檢查，特別檢查疑似拼字錯誤與中文解釋是否可疑；只回報有可靠依據的問題，不確定時請明確標示並不要直接修改。"
+                    )
+                },
                 onBack = { navController.popBackStack() }
             )
         }

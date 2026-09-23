@@ -11,10 +11,12 @@ object LearningStats {
     fun calculateStreak(
         logs: List<StudyLog>,
         today: LocalDate = LocalDate.now(),
-        zoneId: ZoneId = ZoneId.systemDefault()
+        zoneId: ZoneId = ZoneId.systemDefault(),
+        extraActiveDays: Set<LocalDate> = emptySet()
     ): StreakStats {
-        val days = logs.asSequence()
+        val days = (logs.asSequence()
             .map { Instant.ofEpochMilli(it.reviewedAt).atZone(zoneId).toLocalDate() }
+            .plus(extraActiveDays.asSequence()))
             .distinct()
             .sorted()
             .toList()

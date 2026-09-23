@@ -7,23 +7,27 @@ import com.example.data.AppDatabase
 import com.example.data.entity.Deck
 import com.example.data.entity.Flashcard
 import com.example.data.entity.StudyLog
+import com.example.data.learning.StudyCheckInStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import java.time.LocalDate
 
 class BackupService(
     private val context: Context,
     private val database: AppDatabase
 ) {
+    private val studyCheckInStore = StudyCheckInStore(context)
+
     suspend fun exportJson(uri: Uri): Int = withContext(Dispatchers.IO) {
         val decks = database.deckDao().getAllDecks().first()
         val cards = database.flashcardDao().getAllCards().first()
         val logs = database.studyLogDao().getAllLogs().first()
         val root = JSONObject()
             .put("format", "vocab-backup")
-            .put("version", 1)
+            .put("version", 2)
             .put("exportedAt", System.currentTimeMillis())
             .put("decks", JSONArray().apply {
                 decks.forEach { deck ->
@@ -45,6 +49,7 @@ class BackupService(
                     put(JSONObject().put("cardId", log.cardId).put("rating", log.rating).put("reviewedAt", log.reviewedAt))
                 }
             })
+            .put("makeUpCheckIns", JSONArray(studyCheckInStore.currentDates().map(LocalDate::toString)))
         context.contentResolver.openOutputStream(uri, "w")!!.bufferedWriter().use { it.write(root.toString(2)) }
         cards.size
     }
@@ -75,6 +80,7 @@ class BackupService(
         val deckItems = root.optJSONArray("decks") ?: JSONArray()
         val cardItems = root.optJSONArray("cards") ?: JSONArray()
         val logItems = root.optJSONArray("studyLogs") ?: JSONArray()
+        val checkInItems = root.optJSONArray("makeUpCheckIns") ?: JSONArray()
         var imported = 0
         database.withTransaction {
             val existingDecks = database.deckDao().getAllDecks().first().toMutableList()
@@ -140,6 +146,11 @@ class BackupService(
                 )
             }
         }
+        studyCheckInStore.merge(
+            (0 until checkInItems.length()).mapNotNull { index ->
+                runCatching { LocalDate.parse(checkInItems.optString(index)) }.getOrNull()
+            }.toSet()
+        )
         imported
     }
 

@@ -150,6 +150,8 @@ fun AiAssistantScreen(
     onStopSpeaking: () -> Unit,
     onPronunciationResult: (Long, Int) -> Unit,
     onReadingMistake: (Long) -> Unit,
+    onCopyReadingCard: (Flashcard, Long, (Boolean) -> Unit) -> Unit,
+    onCreateFolderAndCopyReadingCard: (String, String, String, String, Flashcard, (Boolean) -> Unit) -> Unit,
     onConfirmAction: () -> Unit,
     onCancelAction: () -> Unit,
     onUndoAction: () -> Unit,
@@ -347,10 +349,13 @@ fun AiAssistantScreen(
         InteractiveReadingScreen(
             message = activeArticleMessage,
             cards = cards,
+            decks = decks,
             onSpeak = onSpeak,
             onStopSpeaking = onStopSpeaking,
             onPronunciationResult = onPronunciationResult,
             onReadingMistake = onReadingMistake,
+            onCopyCardToDeck = onCopyReadingCard,
+            onCreateFolderAndCopyCard = onCreateFolderAndCopyReadingCard,
             onBack = { activeArticleMessageId = null }
         )
         return

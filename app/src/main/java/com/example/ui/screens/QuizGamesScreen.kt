@@ -208,11 +208,9 @@ fun QuizGamesScreen(
         val deckTitle = activeGameTitle.ifBlank { "單字測驗" }
 
         Scaffold(
-            contentWindowInsets = WindowInsets(0, 0, 0, 0),
             topBar = {
                 TopAppBar(
                     expandedHeight = 48.dp,
-                    windowInsets = WindowInsets(0, 0, 0, 0),
                     title = {
                         Text(deckTitle, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
                     },

@@ -22,9 +22,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.FactCheck
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.PlayArrow
@@ -66,6 +69,7 @@ import com.example.data.entity.StudyLog
 import com.example.data.stats.LearningStats
 import com.example.data.stats.LearningProgress
 import com.example.ui.components.StatisticsChart
+import java.time.LocalDate
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -77,6 +81,7 @@ fun DashboardScreen(
     masteredCount: Int,
     dueCount: Int,
     logs: List<StudyLog>,
+    makeUpDates: Set<LocalDate>,
     dailyGoalCards: Int,
     selectedDeckId: Long?,
     onSelectDeck: (Long?) -> Unit,
@@ -90,14 +95,17 @@ fun DashboardScreen(
     updateAvailable: Boolean = false,
     showTopBar: Boolean = true,
     onOpenExternalImport: () -> Unit,
+    onStartInteractiveReading: (Long) -> Unit,
+    onOpenStudyCalendar: () -> Unit,
+    onOpenQualityCheck: () -> Unit,
     onOpenAssistant: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var showAddFolderDialog by remember { mutableStateOf(false) }
     var pendingFolderAction by remember { mutableStateOf<String?>(null) } // "REVIEW" or "GAME"
-    val courses = remember(decks) { decks.map { it.category }.distinct().ifEmpty { listOf("通用課程") } }
+    val courses = remember(decks) { decks.map { it.category }.filter(String::isNotBlank).distinct() }
     var selectedCourseFilter by remember { mutableStateOf<String?>(null) }
-    val streak = remember(logs) { LearningStats.calculateStreak(logs) }
+    val streak = remember(logs, makeUpDates) { LearningStats.calculateStreak(logs, extraActiveDays = makeUpDates) }
     val progress = remember(logs, dailyGoalCards) {
         LearningProgress.calculate(logs, dailyGoalCards)
     }
@@ -109,7 +117,11 @@ fun DashboardScreen(
             onDismissRequest = { pendingFolderAction = null },
             title = {
                 Text(
-                    text = if (actionType == "REVIEW") "選擇要複習的資料夾" else "選擇要測驗的資料夾",
+                    text = when (actionType) {
+                        "REVIEW" -> "選擇要複習的資料夾"
+                        "READING" -> "選擇文章使用的資料夾"
+                        else -> "選擇要測驗的資料夾"
+                    },
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                 )
             },
@@ -119,7 +131,7 @@ fun DashboardScreen(
                     modifier = Modifier.fillMaxWidth().heightIn(max = 480.dp)
                 ) {
                     // Option 1: All Folders
-                    item {
+                    if (actionType != "READING") item {
                         Card(
                             onClick = {
                                 onSelectDeck(null)
@@ -171,7 +183,11 @@ fun DashboardScreen(
                                 if (deckCardCount > 0) {
                                     onSelectDeck(deck.id)
                                     pendingFolderAction = null
-                                    if (actionType == "REVIEW") onStartReview() else onOpenQuizGames(deck.id)
+                                    when (actionType) {
+                                        "REVIEW" -> onStartReview()
+                                        "READING" -> onStartInteractiveReading(deck.id)
+                                        else -> onOpenQuizGames(deck.id)
+                                    }
                                 }
                             },
                             shape = RoundedCornerShape(14.dp),
@@ -373,6 +389,37 @@ fun DashboardScreen(
                 )
             }
 
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("學習工具", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        CompactLearningTool(
+                            title = "文章閱讀",
+                            icon = Icons.AutoMirrored.Filled.MenuBook,
+                            enabled = totalCount > 0,
+                            onClick = { pendingFolderAction = "READING" },
+                            modifier = Modifier.weight(1f)
+                        )
+                        CompactLearningTool(
+                            title = "學習日曆",
+                            icon = Icons.Default.CalendarMonth,
+                            onClick = onOpenStudyCalendar,
+                            modifier = Modifier.weight(1f)
+                        )
+                        CompactLearningTool(
+                            title = "資料檢查",
+                            icon = Icons.AutoMirrored.Filled.FactCheck,
+                            enabled = totalCount > 0,
+                            onClick = onOpenQualityCheck,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+
             // Course & Folder Management Section
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -559,6 +606,32 @@ private fun QuickToolCard(
                 style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
                 color = if (enabled) color else MaterialTheme.colorScheme.outline
             )
+        }
+    }
+}
+
+@Composable
+private fun CompactLearningTool(
+    title: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (enabled) 0.7f else 0.35f),
+        modifier = modifier
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            Icon(icon, contentDescription = null, tint = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline)
+            Text(title, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, maxLines = 1)
         }
     }
 }

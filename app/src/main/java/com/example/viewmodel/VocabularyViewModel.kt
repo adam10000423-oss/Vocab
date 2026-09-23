@@ -13,6 +13,7 @@ import com.example.data.entity.StudyLog
 import com.example.data.importer.ExternalCardCandidate
 import com.example.data.importer.AiExternalFormattingResult
 import com.example.data.learning.LearningSessionStore
+import com.example.data.learning.StudyCheckInStore
 import com.example.data.settings.AppSettings
 import com.example.data.settings.ReminderTime
 import com.example.data.settings.SettingsRepository
@@ -84,6 +85,7 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
     private val backupService = BackupService(application, db)
     private val aiCredentialsStore = AiCredentialsStore(application)
     private val learningSessionStore = LearningSessionStore(application)
+    private val studyCheckInStore = StudyCheckInStore(application)
     private val assistantChatStore = AssistantChatStore(application)
     private val pronunciationPracticeStore = PronunciationPracticeStore(application)
     private val cardSaveMutex = Mutex()
@@ -109,6 +111,7 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
         initialValue = emptyList()
     )
     val pronunciationWeakCardIds: StateFlow<Set<Long>> = pronunciationPracticeStore.weakCardIds
+    val studyCheckInDates = studyCheckInStore.dates
 
     val dueCards: StateFlow<List<Flashcard>> = currentTime.flatMapLatest {
         repository.getDueCards(it)
@@ -308,6 +311,91 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
                 _dataMessage.value = "建立資料夾並移動失敗：${it.message ?: "未知錯誤"}"
                 onComplete(-1, 0)
             }
+        }
+    }
+
+    fun copyCardToDeck(card: Flashcard, targetDeckId: Long, onComplete: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            runCatching {
+                val sortOrder = repository.nextSortOrder(targetDeckId, 1)
+                repository.insertCardsDeduplicating(
+                    listOf(
+                        card.copy(
+                            id = 0,
+                            deckId = targetDeckId,
+                            isMastered = false,
+                            isFavorite = false,
+                            mistakeCount = 0,
+                            intervalDays = 0,
+                            easeFactor = 2.5f,
+                            repetitionCount = 0,
+                            nextReviewTimestamp = System.currentTimeMillis(),
+                            lastReviewedTimestamp = null,
+                            createdAt = System.currentTimeMillis(),
+                            sortOrder = sortOrder
+                        )
+                    )
+                )
+            }.onSuccess { onComplete(it > 0) }
+                .onFailure {
+                    _dataMessage.value = "加入資料夾失敗：${it.message ?: "未知錯誤"}"
+                    onComplete(false)
+                }
+        }
+    }
+
+    fun createFolderAndCopyCard(
+        courseName: String,
+        folderName: String,
+        description: String,
+        colorHex: String,
+        card: Flashcard,
+        onComplete: (Boolean) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            runCatching {
+                val safeCourse = courseName.trim()
+                val safeName = folderName.trim()
+                require(safeCourse.isNotBlank() && safeName.isNotBlank()) { "課程與資料夾名稱不能空白" }
+                require(allDecks.value.none {
+                    it.category.equals(safeCourse, ignoreCase = true) &&
+                        it.name.equals(safeName, ignoreCase = true)
+                }) { "同一課程中已經有同名資料夾" }
+                val deckId = repository.insertDeck(
+                    Deck(
+                        category = safeCourse,
+                        name = safeName,
+                        description = description.trim(),
+                        colorHex = colorHex
+                    )
+                )
+                val copied = card.copy(
+                    id = 0,
+                    deckId = deckId,
+                    isMastered = false,
+                    isFavorite = false,
+                    mistakeCount = 0,
+                    intervalDays = 0,
+                    easeFactor = 2.5f,
+                    repetitionCount = 0,
+                    nextReviewTimestamp = System.currentTimeMillis(),
+                    lastReviewedTimestamp = null,
+                    createdAt = System.currentTimeMillis(),
+                    sortOrder = System.currentTimeMillis()
+                )
+                repository.insertCardsDeduplicating(listOf(copied)) > 0
+            }.onSuccess(onComplete)
+                .onFailure {
+                    _dataMessage.value = "建立資料夾失敗：${it.message ?: "未知錯誤"}"
+                    onComplete(false)
+                }
+        }
+    }
+
+    fun toggleStudyCheckIn(date: java.time.LocalDate) {
+        if (date <= java.time.LocalDate.now()) {
+            studyCheckInStore.toggle(date)
+            VocabWidgetProvider.requestUpdate(getApplication())
         }
     }
 
@@ -675,6 +763,7 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
                 settingsRepository.resetAfterDataClear()
                 aiCredentialsStore.clear()
                 learningSessionStore.clearAll()
+                studyCheckInStore.clear()
                 assistantChatStore.clear()
                 pronunciationPracticeStore.clear()
                 assistantAllMessages.clear()
@@ -759,6 +848,7 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
         viewModelScope.launch {
             _dataMessage.value = runCatching {
                 val count = backupService.importJson(uri)
+                studyCheckInStore.reload()
                 "備份還原完成，新增 $count 張單字卡"
             }.getOrElse { "還原失敗：${it.message ?: "檔案格式錯誤"}" }
         }

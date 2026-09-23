@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -48,6 +49,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.data.assistant.AssistantMessage
 import com.example.data.entity.Flashcard
+import com.example.data.entity.Deck
+import com.example.ui.components.AddFolderDialog
 import com.example.ui.components.PronunciationPracticeDialog
 import org.json.JSONObject
 
@@ -73,10 +76,13 @@ private data class ReadingContent(
 fun InteractiveReadingScreen(
     message: AssistantMessage,
     cards: List<Flashcard>,
+    decks: List<Deck>,
     onSpeak: (String) -> Unit,
     onStopSpeaking: () -> Unit,
     onPronunciationResult: (Long, Int) -> Unit,
     onReadingMistake: (Long) -> Unit,
+    onCopyCardToDeck: (Flashcard, Long, (Boolean) -> Unit) -> Unit,
+    onCreateFolderAndCopyCard: (String, String, String, String, Flashcard, (Boolean) -> Unit) -> Unit,
     onBack: () -> Unit
 ) {
     val content = remember(message.payload, message.content, cards) {
@@ -91,6 +97,61 @@ fun InteractiveReadingScreen(
     var correctCount by remember { mutableIntStateOf(0) }
     var completed by remember { mutableStateOf(false) }
     var missedWords by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var cardToAdd by remember { mutableStateOf<Flashcard?>(null) }
+    var showCreateFolder by remember { mutableStateOf(false) }
+    var copyStatus by remember { mutableStateOf<String?>(null) }
+
+    cardToAdd?.let { card ->
+        if (showCreateFolder) {
+            AddFolderDialog(
+                existingCourses = decks.map { it.category }.distinct(),
+                defaultCourse = decks.firstOrNull { it.id == card.deckId }?.category,
+                onDismiss = { showCreateFolder = false },
+                onConfirm = { course, folder, description, color ->
+                    onCreateFolderAndCopyCard(course, folder, description, color, card) { added ->
+                        copyStatus = if (added) "已建立資料夾並加入 ${card.word}" else "沒有新增：請確認資料夾名稱"
+                    }
+                    showCreateFolder = false
+                    cardToAdd = null
+                }
+            )
+        } else {
+            AlertDialog(
+                onDismissRequest = { cardToAdd = null },
+                title = { Text("加入資料夾") },
+                text = {
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        val targets = decks.filter { it.id != card.deckId }
+                        if (targets.isEmpty()) item {
+                            Text("目前沒有其他資料夾，可以建立新的資料夾。")
+                        }
+                        items(targets) { deck ->
+                            Surface(
+                                onClick = {
+                                    onCopyCardToDeck(card, deck.id) { added ->
+                                        copyStatus = if (added) "已將 ${card.word} 加入「${deck.name}」" else "「${deck.name}」已有 ${card.word}"
+                                    }
+                                    cardToAdd = null
+                                },
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(Modifier.padding(12.dp)) {
+                                    Text(deck.name, fontWeight = FontWeight.Bold)
+                                    Text(deck.category, style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(onClick = { showCreateFolder = true }) { Text("新增資料夾") }
+                },
+                dismissButton = { TextButton(onClick = { cardToAdd = null }) { Text("取消") } }
+            )
+        }
+    }
 
     selectedCard?.let { card ->
         var showBack by remember(card.id) { mutableStateOf(false) }
@@ -117,6 +178,13 @@ fun InteractiveReadingScreen(
                             Icon(Icons.Default.Mic, null)
                             Text("練習")
                         }
+                    }
+                    OutlinedButton(onClick = { cardToAdd = card }, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.Folder, null)
+                        Text("加入其他資料夾")
+                    }
+                    copyStatus?.let {
+                        Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                     }
                 }
             },

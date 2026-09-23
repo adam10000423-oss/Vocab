@@ -8,6 +8,7 @@ import android.content.Intent
 import com.example.MainActivity
 import com.example.data.AppDatabase
 import com.example.data.settings.SettingsRepository
+import com.example.data.learning.StudyCheckInStore
 import com.example.data.stats.LearningProgress
 import com.example.data.stats.LearningStats
 import java.time.LocalDate
@@ -37,7 +38,10 @@ internal suspend fun loadWidgetSnapshot(context: Context): WidgetSnapshot {
         goalCards = progress.goalCards,
         goalPercent = (progress.goalFraction * 100).toInt().coerceIn(0, 100),
         dueCards = database.flashcardDao().getDueCardCount(System.currentTimeMillis()).first(),
-        streakDays = LearningStats.calculateStreak(logs).current,
+        streakDays = LearningStats.calculateStreak(
+            logs,
+            extraActiveDays = StudyCheckInStore(context).dates.value
+        ).current,
         dailyWord = dailyCard?.word?.ifBlank { "尚未新增" } ?: "尚未新增",
         dailyDefinition = dailyCard?.definition?.ifBlank { "尚未填寫解釋" }
             ?: "新增單字後會顯示在這裡"

@@ -3,6 +3,8 @@ package com.example.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -18,7 +21,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -36,6 +44,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.data.entity.Deck
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddFolderDialog(
     existingCourses: List<String>,
@@ -43,9 +52,13 @@ fun AddFolderDialog(
     onDismiss: () -> Unit,
     onConfirm: (courseName: String, folderName: String, description: String, colorHex: String) -> Unit
 ) {
-    var courseName by remember { mutableStateOf(defaultCourse ?: existingCourses.firstOrNull() ?: "檢定英語課程") }
+    val courseOptions = remember(existingCourses) { existingCourses.filter { it.isNotBlank() }.distinct() }
+    var courseName by remember(defaultCourse, courseOptions) {
+        mutableStateOf(defaultCourse?.takeIf { it.isNotBlank() } ?: courseOptions.firstOrNull().orEmpty())
+    }
     var newCourseInput by remember { mutableStateOf("") }
-    var isAddingNewCourse by remember { mutableStateOf(false) }
+    var isAddingNewCourse by remember(courseOptions) { mutableStateOf(courseOptions.isEmpty()) }
+    var isCourseMenuExpanded by remember { mutableStateOf(false) }
     var folderName by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
 
@@ -68,7 +81,13 @@ fun AddFolderDialog(
             )
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 420.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
                 // Course Selection or Creation
                 Text(
                     text = "課程",
@@ -77,36 +96,46 @@ fun AddFolderDialog(
                 )
 
                 if (!isAddingNewCourse) {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        existingCourses.distinct().forEach { course ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(
-                                        if (courseName == course) MaterialTheme.colorScheme.primaryContainer
-                                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                                    )
-                                    .clickable { courseName = course }
-                                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = course,
-                                    style = MaterialTheme.typography.bodyMedium.copy(
-                                        fontWeight = if (courseName == course) FontWeight.Bold else FontWeight.Normal
-                                    ),
-                                    color = if (courseName == course) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                    ExposedDropdownMenuBox(
+                        expanded = isCourseMenuExpanded,
+                        onExpandedChange = { isCourseMenuExpanded = it },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        OutlinedTextField(
+                            value = courseName,
+                            onValueChange = {},
+                            readOnly = true,
+                            singleLine = true,
+                            label = { Text("選擇課程") },
+                            trailingIcon = {
+                                ExposedDropdownMenuDefaults.TrailingIcon(expanded = isCourseMenuExpanded)
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true)
+                        )
+                        ExposedDropdownMenu(
+                            expanded = isCourseMenuExpanded,
+                            onDismissRequest = { isCourseMenuExpanded = false }
+                        ) {
+                            courseOptions.forEach { course ->
+                                DropdownMenuItem(
+                                    text = { Text(course) },
+                                    onClick = {
+                                        courseName = course
+                                        isCourseMenuExpanded = false
+                                    }
                                 )
                             }
-                        }
-
-                        OutlinedButton(
-                            onClick = { isAddingNewCourse = true },
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth().testTag("add_new_course_toggle_button")
-                        ) {
-                            Text("新增課程")
+                            DropdownMenuItem(
+                                text = { Text("新增課程…") },
+                                onClick = {
+                                    isCourseMenuExpanded = false
+                                    isAddingNewCourse = true
+                                },
+                                modifier = Modifier.testTag("add_new_course_toggle_button")
+                            )
                         }
                     }
                 } else {
@@ -118,6 +147,15 @@ fun AddFolderDialog(
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth().testTag("new_course_name_input")
                     )
+                    if (courseOptions.isNotEmpty()) {
+                        OutlinedButton(
+                            onClick = { isAddingNewCourse = false },
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("改選現有課程")
+                        }
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(4.dp))
