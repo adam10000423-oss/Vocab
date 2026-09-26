@@ -83,6 +83,7 @@ fun FlashcardReviewScreen(
     onUndoReview: (Flashcard) -> Unit = {},
     onToggleFavorite: (Flashcard) -> Unit,
     onSpeak: (String) -> Unit,
+    onSpeakLearningCard: (Flashcard) -> Unit = {},
     onStopSpeaking: () -> Unit = {},
     onBackToDashboard: () -> Unit,
     onOpenQuizGames: (() -> Unit)? = null,
@@ -266,8 +267,8 @@ fun FlashcardReviewScreen(
     }
 
     LaunchedEffect(currentCard?.id, isFlipped, autoSpeak, sessionLoaded) {
-        if (autoSpeak && sessionLoaded && !roundFinished) {
-            currentCard?.let { onSpeak(it.word) }
+        if (autoSpeak && isFlipped && sessionLoaded && !roundFinished) {
+            currentCard?.let(onSpeakLearningCard)
         }
     }
 

@@ -119,7 +119,6 @@ fun QuizGamesScreen(
     onOpenDeckManagement: (Long) -> Unit = {},
     onJumpToStudy: (Long?) -> Unit = {},
     onSpeak: (String) -> Unit = {},
-    onSpeakAnswer: (Flashcard, Boolean) -> Unit = { _, _ -> },
     onStopSpeaking: () -> Unit = {},
     onWrongAnswer: (Flashcard) -> Unit = {},
     onGameActiveChange: (Boolean) -> Unit = {},
@@ -261,8 +260,7 @@ fun QuizGamesScreen(
                         QuizPlayMode.MATCH -> DynamicWordMatchingGameView(
                             cards = deckCards,
                             wrongCardsPool = emptyList(),
-                            onAddWrongCard = onWrongAnswer,
-                            onSpeakAnswer = { onSpeakAnswer(it, false) }
+                            onAddWrongCard = onWrongAnswer
                         )
                         null -> Unit
                         else -> IndependentQuizView(
@@ -270,7 +268,6 @@ fun QuizGamesScreen(
                             cards = deckCards,
                             onWrongAnswer = onWrongAnswer,
                             onSpeak = onSpeak,
-                            onSpeakAnswer = onSpeakAnswer,
                             onFinish = {
                                 onStopSpeaking()
                                 activeGameDeckIds = emptySet()
@@ -608,7 +605,6 @@ private fun IndependentQuizView(
     cards: List<Flashcard>,
     onWrongAnswer: (Flashcard) -> Unit,
     onSpeak: (String) -> Unit,
-    onSpeakAnswer: (Flashcard, Boolean) -> Unit,
     onFinish: () -> Unit
 ) {
     // Keep one stable shuffled question order for the whole play session. Wrong-answer
@@ -651,18 +647,6 @@ private fun IndependentQuizView(
         if (answerResult != null) {
             delay(450)
             canAdvance = true
-        }
-    }
-
-    val answeredCard = eligible.getOrNull(questionIndex)
-    LaunchedEffect(answerResult, answeredCard?.id) {
-        if (answerResult != null && answeredCard != null) {
-            val sentenceQuestion = mode in setOf(
-                QuizPlayMode.CLOZE_CHOICE,
-                QuizPlayMode.CLOZE_TYPING,
-                QuizPlayMode.SENTENCE_ORDER
-            )
-            onSpeakAnswer(answeredCard, sentenceQuestion)
         }
     }
 
@@ -1725,8 +1709,7 @@ private fun SpellingQuizView(
 private fun DynamicWordMatchingGameView(
     cards: List<Flashcard>,
     wrongCardsPool: List<Flashcard>,
-    onAddWrongCard: (Flashcard) -> Unit,
-    onSpeakAnswer: (Flashcard) -> Unit
+    onAddWrongCard: (Flashcard) -> Unit
 ) {
     val emptySlot = 0L
     val eligibleCards = cards
@@ -1903,7 +1886,6 @@ private fun DynamicWordMatchingGameView(
     fun evaluatePair(wordId: Long?, definitionId: Long?) {
         if (wordId == null || definitionId == null || wrongWordId != null) return
         if (areCompatible(wordId, definitionId)) {
-            cardById[wordId]?.let(onSpeakAnswer)
             refillMatchedSlots(wordId, definitionId)
             matchedCount++
             selectedWordId = null

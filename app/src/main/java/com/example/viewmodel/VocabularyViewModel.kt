@@ -1036,7 +1036,7 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
         )
     }
 
-    fun speakCardAnswer(card: Flashcard, includeSentence: Boolean) {
+    fun speakLearningCard(card: Flashcard) {
         val value = settings.value
         val segments = buildList {
             if (value.ttsReadWord) add(SpeechSegment(card.word, "en-US"))
@@ -1049,10 +1049,10 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
             if (value.ttsReadPartOfSpeech && card.partOfSpeech.isNotBlank()) {
                 add(SpeechSegment(expandPartOfSpeechForSpeech(card.partOfSpeech), "en-US"))
             }
-            if (includeSentence && value.ttsReadExample && card.exampleSentence.isNotBlank()) {
+            if (value.ttsReadExample && card.exampleSentence.isNotBlank()) {
                 add(SpeechSegment(card.exampleSentence, "en-US"))
             }
-            if (includeSentence && value.ttsReadExampleTranslation && card.exampleTranslation.isNotBlank()) {
+            if (value.ttsReadExampleTranslation && card.exampleTranslation.isNotBlank()) {
                 add(SpeechSegment(card.exampleTranslation, "zh-TW"))
             }
         }

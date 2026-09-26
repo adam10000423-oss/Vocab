@@ -326,7 +326,6 @@ fun VocabApp(
                             }
                         },
                         onSpeak = viewModel::speakText,
-                        onSpeakAnswer = viewModel::speakCardAnswer,
                         onStopSpeaking = viewModel::stopSpeaking,
                         onWrongAnswer = { card ->
                             if (settings.gameMistakesToReview) viewModel.recordGameMistake(card)
@@ -369,6 +368,7 @@ fun VocabApp(
                 onUndoReview = viewModel::undoCardReview,
                 onToggleFavorite = viewModel::toggleFavorite,
                 onSpeak = viewModel::speakText,
+                onSpeakLearningCard = viewModel::speakLearningCard,
                 onStopSpeaking = viewModel::stopSpeaking,
                 onBackToDashboard = {
                     currentTab = 2

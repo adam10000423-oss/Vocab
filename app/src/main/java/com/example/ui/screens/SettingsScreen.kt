@@ -860,7 +860,12 @@ fun SettingsScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Text("答題完成朗讀內容", fontWeight = FontWeight.Bold)
+                    Text("學習卡翻到背面時的自動朗讀", fontWeight = FontWeight.Bold)
+                    Text(
+                        "需先開啟「翻卡後自動朗讀」；下列內容會依順序組成一組播放。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                     SettingSwitch("英文單字", settings.ttsReadWord) { onBooleanChange("ttsReadWord", it) }
                     SettingSwitch("中文解釋", settings.ttsReadDefinition) { onBooleanChange("ttsReadDefinition", it) }
                     SettingSwitch("音標", settings.ttsReadPhonetic) { onBooleanChange("ttsReadPhonetic", it) }
