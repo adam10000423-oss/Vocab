@@ -246,11 +246,11 @@ fun InteractiveReadingScreen(
                     questionIndex = 0; selectedOption = -1; correctCount = 0
                     completed = false; missedWords = emptySet()
                 },
-                modifier = Modifier.padding(padding)
+                modifier = Modifier.padding(padding).padding(top = 6.dp)
             )
         } else {
             LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp),
+                modifier = Modifier.fillMaxSize().padding(padding).padding(top = 6.dp).padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 item {

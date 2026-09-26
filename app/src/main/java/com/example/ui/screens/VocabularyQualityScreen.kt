@@ -64,7 +64,7 @@ fun VocabularyQualityScreen(
         }
     ) { padding ->
         LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp),
+            modifier = Modifier.fillMaxSize().padding(padding).padding(top = 6.dp).padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             item {

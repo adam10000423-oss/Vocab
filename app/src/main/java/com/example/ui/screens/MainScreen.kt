@@ -221,6 +221,7 @@ fun MainScreen(
             userScrollEnabled = showBottomNavigation,
             modifier = Modifier
                 .padding(innerPadding)
+                .padding(top = 6.dp)
                 .fillMaxSize()
         ) { page ->
             when (page) {

@@ -594,6 +594,7 @@ fun AiAssistantScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .padding(top = if (useLandscapeInputOverlay) 0.dp else 6.dp)
                 .padding(horizontal = 12.dp)
         ) {
             if (!useLandscapeInputOverlay) {
@@ -1411,6 +1412,7 @@ private fun AssistantQuizScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .padding(top = 6.dp)
                 .padding(horizontal = 20.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.Center
         ) {

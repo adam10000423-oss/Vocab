@@ -254,6 +254,7 @@ fun FoldersManagementScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .padding(top = if (showTopBar) 6.dp else 0.dp)
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {

@@ -367,7 +367,7 @@ fun SettingsScreen(
         }
     ) { padding ->
         LazyColumn(
-            modifier = Modifier.padding(padding).padding(horizontal = 16.dp),
+            modifier = Modifier.padding(padding).padding(top = 6.dp).padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {

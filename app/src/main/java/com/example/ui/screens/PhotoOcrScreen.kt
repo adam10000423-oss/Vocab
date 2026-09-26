@@ -281,6 +281,7 @@ fun PhotoOcrScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .padding(top = 6.dp)
                 .padding(responsive.horizontalPadding),
             verticalArrangement = Arrangement.spacedBy(if (responsive.isConstrained) 8.dp else 16.dp)
         ) {

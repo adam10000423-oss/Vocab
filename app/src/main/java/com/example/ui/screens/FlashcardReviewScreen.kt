@@ -317,6 +317,7 @@ fun FlashcardReviewScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .padding(top = 6.dp)
                 .padding(horizontal = responsive.horizontalPadding, vertical = if (responsive.isConstrained) 6.dp else 12.dp)
                 .then(
                     if (responsive.isLandscape) Modifier.verticalScroll(rememberScrollState())

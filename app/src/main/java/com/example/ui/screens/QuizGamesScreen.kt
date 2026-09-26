@@ -245,6 +245,7 @@ fun QuizGamesScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
+                    .padding(top = 6.dp)
                     .padding(horizontal = 16.dp)
             ) {
                 if (deckCards.isEmpty()) {
@@ -307,6 +308,7 @@ fun QuizGamesScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .padding(top = if (showHubTopBar) 6.dp else 0.dp)
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {

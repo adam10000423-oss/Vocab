@@ -91,6 +91,7 @@ fun StudyCalendarScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .padding(top = 6.dp)
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)

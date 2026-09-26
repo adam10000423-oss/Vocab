@@ -474,6 +474,7 @@ fun AddEditCardScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .padding(top = 6.dp)
                 .padding(horizontal = 14.dp)
                 .imePadding(),
             verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -852,7 +853,7 @@ private fun NoFolderForCardEditor(
         modifier = modifier
     ) { padding ->
         Box(
-            modifier = Modifier.fillMaxSize().padding(padding).padding(24.dp),
+            modifier = Modifier.fillMaxSize().padding(padding).padding(top = 6.dp).padding(24.dp),
             contentAlignment = Alignment.Center
         ) {
             CalmEmptyState(

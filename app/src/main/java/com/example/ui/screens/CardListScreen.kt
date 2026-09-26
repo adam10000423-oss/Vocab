@@ -514,6 +514,7 @@ fun CardListScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .padding(top = 6.dp)
                 .padding(horizontal = 16.dp)
         ) {
             val courses = remember(decks) { decks.map { it.category }.distinct() }
