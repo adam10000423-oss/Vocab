@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -123,7 +124,7 @@ fun SettingsScreen(
     onSaveApiKey: (String) -> Unit,
     onClearApiKey: (String) -> Unit,
     onRefreshAiModels: () -> Unit,
-    onTestAiConnection: () -> Unit,
+    onTestAiConnection: (String?) -> Unit,
     onExportBackup: (Uri) -> Unit,
     onExportCsv: (Uri) -> Unit,
     onImportBackup: (Uri) -> Unit,
@@ -138,6 +139,7 @@ fun SettingsScreen(
     var updateBusy by remember { mutableStateOf(false) }
     var apiKeyInput by remember(settings.aiProvider) { mutableStateOf("") }
     var customModelInput by remember(settings.aiProvider) { mutableStateOf(false) }
+    var showAiTutorial by remember { mutableStateOf(false) }
     var promptInput by remember(settings.aiWordPrompt) { mutableStateOf(settings.aiWordPrompt) }
     var imagePromptInput by remember(settings.aiImagePrompt) {
         mutableStateOf(settings.aiImagePrompt)
@@ -296,6 +298,58 @@ fun SettingsScreen(
             dismissButton = {
                 TextButton(onClick = { showClearDataDialog = false }) { Text("取消") }
             }
+        )
+    }
+
+    if (showAiTutorial) {
+        AlertDialog(
+            onDismissRequest = { showAiTutorial = false },
+            title = { Text("AI 連線教學", fontWeight = FontWeight.Bold) },
+            text = {
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 480.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    item {
+                        Text("Google Gemini", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("1. 登入 Google AI Studio。\n2. 建立或選擇專案並產生 API Key。\n3. 回到 Vocab，選擇 Google Gemini、貼上 Key、選模型後儲存。\n4. 在該 Key 卡片按「測試這組」。")
+                        OutlinedButton(
+                            onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://ai.google.dev/gemini-api/docs/api-key"))) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.AutoMirrored.Filled.OpenInNew, null)
+                            Text("Gemini 官方教學")
+                        }
+                        Button(
+                            onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://aistudio.google.com/app/apikey"))) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("前往取得 Gemini API Key") }
+                    }
+                    item {
+                        Text("OpenRouter", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("1. 登入 OpenRouter。\n2. 到 API Keys 建立 Key。\n3. 回到 Vocab，選擇 OpenRouter、貼上 Key。\n4. 更新模型清單並選擇模型，再測試該 Key。")
+                        OutlinedButton(
+                            onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://openrouter.ai/docs/quickstart"))) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.AutoMirrored.Filled.OpenInNew, null)
+                            Text("OpenRouter 官方教學")
+                        }
+                        Button(
+                            onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://openrouter.ai/settings/keys"))) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("前往取得 OpenRouter API Key") }
+                    }
+                    item {
+                        Text(
+                            "安全提醒：API Key 只貼在 Vocab 的設定欄位，不要傳到聊天室、截圖、GitHub 或分享網址。",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showAiTutorial = false }) { Text("完成") } }
         )
     }
 
@@ -555,13 +609,22 @@ fun SettingsScreen(
                     SettingDropdown(
                         label = "AI 供應商",
                         value = provider.name,
-                        options = AiProvider.entries.map { it.name },
+                        options = listOf(
+                            AiProvider.GEMINI,
+                            AiProvider.OPENROUTER,
+                            AiProvider.OPENAI,
+                            AiProvider.ANTHROPIC
+                        ).map { it.name },
                         optionText = { AiProvider.from(it).displayName },
                         onSelected = {
                             customModelInput = false
                             onAiProviderChange(it)
                         }
                     )
+                    OutlinedButton(
+                        onClick = { showAiTutorial = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("查看 AI 連線教學") }
                     Button(
                         onClick = {
                             context.startActivity(
@@ -650,7 +713,7 @@ fun SettingsScreen(
                             Icon(Icons.Default.Refresh, contentDescription = null)
                             Text("更新模型")
                         }
-                        Button(onClick = onTestAiConnection, enabled = selectedProviderConfigured && settings.aiModel.isNotBlank()) {
+                        Button(onClick = { onTestAiConnection(null) }, enabled = selectedProviderConfigured && settings.aiModel.isNotBlank()) {
                             Text("測試連線")
                         }
                     }
@@ -694,6 +757,12 @@ fun SettingsScreen(
                                         singleLine = true,
                                         modifier = Modifier.fillMaxWidth()
                                     )
+                                    Button(
+                                        onClick = { onTestAiConnection(profile.credentialId) },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text("測試這組 ${profile.provider.displayName} API")
+                                    }
                                 }
                             }
                         }
@@ -791,6 +860,16 @@ fun SettingsScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    Text("答題完成朗讀內容", fontWeight = FontWeight.Bold)
+                    SettingSwitch("英文單字", settings.ttsReadWord) { onBooleanChange("ttsReadWord", it) }
+                    SettingSwitch("中文解釋", settings.ttsReadDefinition) { onBooleanChange("ttsReadDefinition", it) }
+                    SettingSwitch("音標", settings.ttsReadPhonetic) { onBooleanChange("ttsReadPhonetic", it) }
+                    SettingSwitch("詞性", settings.ttsReadPartOfSpeech) { onBooleanChange("ttsReadPartOfSpeech", it) }
+                    SettingSwitch("英文例句", settings.ttsReadExample) { onBooleanChange("ttsReadExample", it) }
+                    SettingSwitch("中文例句", settings.ttsReadExampleTranslation) { onBooleanChange("ttsReadExampleTranslation", it) }
+                    NumberSetting("每組朗讀次數", settings.ttsGroupRepetitions, 1, 1..3) {
+                        onIntChange("ttsGroupRepetitions", it)
+                    }
                     Text("朗讀速度 ${"%.1f".format(settings.speechRate)} 倍")
                     Slider(
                         value = settings.speechRate,
@@ -871,6 +950,17 @@ fun SettingsScreen(
                         Text("檢查更新")
                     }
                     availableRelease?.let { release ->
+                        if (release.notes.isNotBlank()) {
+                            Text("更新日誌", fontWeight = FontWeight.Bold)
+                            Text(
+                                release.notes
+                                    .replace(Regex("(?m)^#{1,6}\\s*"), "")
+                                    .replace("**", "")
+                                    .take(4_000),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                         val cachedApk = downloadedApk?.takeIf(File::exists)
                         if (cachedApk == null) {
                             Button(

@@ -47,4 +47,4 @@ jobs:
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" "Vocab-${GITHUB_REF_NAME}.apk" --title "Vocab $GITHUB_REF_NAME" --generate-notes
+        run: gh release create "$GITHUB_REF_NAME" "Vocab-${GITHUB_REF_NAME}.apk" --title "Vocab $GITHUB_REF_NAME" --notes-file RELEASE_NOTES.md

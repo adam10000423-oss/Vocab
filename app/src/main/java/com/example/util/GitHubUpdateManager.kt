@@ -22,7 +22,8 @@ data class GitHubRelease(
     val version: String,
     val name: String,
     val apkUrl: String,
-    val htmlUrl: String
+    val htmlUrl: String,
+    val notes: String
 )
 
 sealed interface UpdateCheckResult {
@@ -73,7 +74,8 @@ object GitHubUpdateManager {
                     version = version,
                     name = root.optString("name", "Vocab v$version"),
                     apkUrl = apkUrl,
-                    htmlUrl = root.optString("html_url")
+                    htmlUrl = root.optString("html_url"),
+                    notes = root.optString("body")
                 )
                 if (isNewer(version, BuildConfig.VERSION_NAME)) {
                     UpdateCheckResult.Available(release)

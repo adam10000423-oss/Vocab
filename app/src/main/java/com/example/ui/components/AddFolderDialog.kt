@@ -31,11 +31,15 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -43,6 +47,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.data.entity.Deck
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -61,6 +66,16 @@ fun AddFolderDialog(
     var isCourseMenuExpanded by remember { mutableStateOf(false) }
     var folderName by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
+    val newCourseFocusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    LaunchedEffect(isAddingNewCourse) {
+        if (isAddingNewCourse) {
+            delay(120)
+            newCourseFocusRequester.requestFocus()
+            keyboardController?.show()
+        }
+    }
 
     val colorOptions = listOf(
         "#426B63", // Sage
@@ -145,7 +160,10 @@ fun AddFolderDialog(
                         label = { Text("課程名稱") },
                         singleLine = true,
                         shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth().testTag("new_course_name_input")
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(newCourseFocusRequester)
+                            .testTag("new_course_name_input")
                     )
                     if (courseOptions.isNotEmpty()) {
                         OutlinedButton(

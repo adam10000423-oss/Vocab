@@ -50,6 +50,13 @@ class SettingsRepository(private val context: Context) {
         val speechRate = floatPreferencesKey("speech_rate")
         val ttsVoiceStyle = stringPreferencesKey("tts_voice_style")
         val ttsVoiceName = stringPreferencesKey("tts_voice_name")
+        val ttsReadWord = booleanPreferencesKey("tts_read_word")
+        val ttsReadDefinition = booleanPreferencesKey("tts_read_definition")
+        val ttsReadPhonetic = booleanPreferencesKey("tts_read_phonetic")
+        val ttsReadPartOfSpeech = booleanPreferencesKey("tts_read_part_of_speech")
+        val ttsReadExample = booleanPreferencesKey("tts_read_example")
+        val ttsReadExampleTranslation = booleanPreferencesKey("tts_read_example_translation")
+        val ttsGroupRepetitions = intPreferencesKey("tts_group_repetitions")
         val remindersEnabled = booleanPreferencesKey("reminders_enabled")
         val reminderHour = intPreferencesKey("reminder_hour")
         val reminderMinute = intPreferencesKey("reminder_minute")
@@ -110,6 +117,13 @@ class SettingsRepository(private val context: Context) {
             speechRate = (value[Keys.speechRate] ?: 1f).coerceIn(0.5f, 1.5f),
             ttsVoiceStyle = value[Keys.ttsVoiceStyle] ?: "NATURAL",
             ttsVoiceName = value[Keys.ttsVoiceName] ?: "",
+            ttsReadWord = value[Keys.ttsReadWord] ?: true,
+            ttsReadDefinition = value[Keys.ttsReadDefinition] ?: true,
+            ttsReadPhonetic = value[Keys.ttsReadPhonetic] ?: true,
+            ttsReadPartOfSpeech = value[Keys.ttsReadPartOfSpeech] ?: true,
+            ttsReadExample = value[Keys.ttsReadExample] ?: true,
+            ttsReadExampleTranslation = value[Keys.ttsReadExampleTranslation] ?: true,
+            ttsGroupRepetitions = (value[Keys.ttsGroupRepetitions] ?: 2).coerceIn(1, 3),
             remindersEnabled = value[Keys.remindersEnabled] ?: false,
             reminderHour = (value[Keys.reminderHour] ?: 20).coerceIn(0, 23),
             reminderMinute = (value[Keys.reminderMinute] ?: 0).coerceIn(0, 59),
@@ -131,6 +145,12 @@ class SettingsRepository(private val context: Context) {
             "usePersonalAiApi" -> Keys.usePersonalAiApi
             "ocrPreviewBeforeImport" -> Keys.ocrPreviewBeforeImport
             "autoSpeak" -> Keys.autoSpeak
+            "ttsReadWord" -> Keys.ttsReadWord
+            "ttsReadDefinition" -> Keys.ttsReadDefinition
+            "ttsReadPhonetic" -> Keys.ttsReadPhonetic
+            "ttsReadPartOfSpeech" -> Keys.ttsReadPartOfSpeech
+            "ttsReadExample" -> Keys.ttsReadExample
+            "ttsReadExampleTranslation" -> Keys.ttsReadExampleTranslation
             "remindersEnabled" -> Keys.remindersEnabled
             "gameMistakesToReview" -> Keys.gameMistakesToReview
             "autoCheckUpdates" -> Keys.autoCheckUpdates
@@ -249,6 +269,7 @@ class SettingsRepository(private val context: Context) {
             "pdfPageLimit" -> it[Keys.pdfPageLimit] = number.coerceIn(1, 50)
             "reminderHour" -> it[Keys.reminderHour] = number.coerceIn(0, 23)
             "reminderMinute" -> it[Keys.reminderMinute] = number.coerceIn(0, 59)
+            "ttsGroupRepetitions" -> it[Keys.ttsGroupRepetitions] = number.coerceIn(1, 3)
             else -> error("Unknown integer setting: $name")
         }
     }

@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Style
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
@@ -49,6 +50,7 @@ fun MainScreen(
     studyContent: @Composable () -> Unit,
     quizContent: @Composable () -> Unit,
     onOpenAssistant: () -> Unit = {},
+    onOpenWordSearch: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
     updateAvailable: Boolean = false,
     showBottomNavigation: Boolean = true,
@@ -102,6 +104,11 @@ fun MainScreen(
                         }
                     },
                     actions = {
+                        if (pagerState.currentPage == 0) {
+                            IconButton(onClick = onOpenWordSearch) {
+                                Icon(Icons.Default.Search, contentDescription = "搜尋英文單字")
+                            }
+                        }
                         IconButton(onClick = onOpenAssistant) {
                             Icon(
                                 imageVector = Icons.Default.AutoAwesome,

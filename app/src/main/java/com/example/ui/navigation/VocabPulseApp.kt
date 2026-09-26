@@ -39,6 +39,7 @@ import com.example.ui.screens.OnboardingGoalScreen
 import com.example.ui.screens.AiAssistantScreen
 import com.example.ui.screens.StudyCalendarScreen
 import com.example.ui.screens.VocabularyQualityScreen
+import com.example.ui.screens.WordLookupScreen
 import com.example.viewmodel.VocabularyViewModel
 import com.example.util.GitHubUpdateManager
 import com.example.util.UpdateCheckResult
@@ -55,6 +56,7 @@ object Routes {
     const val AI_ASSISTANT = "ai_assistant"
     const val STUDY_CALENDAR = "study_calendar"
     const val QUALITY_CHECK = "quality_check"
+    const val WORD_LOOKUP = "word_lookup"
 }
 
 @Composable
@@ -160,12 +162,12 @@ fun VocabApp(
                 currentTab = currentTab,
                 onTabSelected = {
                     if (it != currentTab) viewModel.stopSpeaking()
-                    if (it == 3) pendingQuizDeckIds = null
                     if (it != 3) quizGameActive = false
                     currentTab = it
                 },
                 showBottomNavigation = !quizGameActive,
                 onOpenSettings = { navController.navigate(Routes.SETTINGS) },
+                onOpenWordSearch = { navController.navigate(Routes.WORD_LOOKUP) },
                 updateAvailable = updateAvailable,
                 onOpenAssistant = {
                     viewModel.openAssistant(null)
@@ -324,6 +326,7 @@ fun VocabApp(
                             }
                         },
                         onSpeak = viewModel::speakText,
+                        onSpeakAnswer = viewModel::speakCardAnswer,
                         onStopSpeaking = viewModel::stopSpeaking,
                         onWrongAnswer = { card ->
                             if (settings.gameMistakesToReview) viewModel.recordGameMistake(card)
@@ -368,13 +371,13 @@ fun VocabApp(
                 onSpeak = viewModel::speakText,
                 onStopSpeaking = viewModel::stopSpeaking,
                 onBackToDashboard = {
+                    currentTab = 2
                     navController.navigate(Routes.MAIN) {
                         popUpTo(Routes.MAIN) { inclusive = false }
                         launchSingleTop = true
                     }
                 },
                 onOpenQuizGames = {
-                    navController.popBackStack()
                     pendingQuizDeckIds = reviewDeckIds
                         ?: selectedDeckId?.let(::setOf)
                         ?: decks.map { it.id }.toSet()
@@ -384,7 +387,21 @@ fun VocabApp(
                         else -> "全站所有單字卡"
                     }
                     currentTab = 3
+                    navController.navigate(Routes.MAIN) {
+                        popUpTo(Routes.MAIN) { inclusive = false }
+                        launchSingleTop = true
+                    }
                 }
+            )
+        }
+
+        composable(Routes.WORD_LOOKUP) {
+            WordLookupScreen(
+                decks = decks,
+                onBack = { navController.popBackStack() },
+                onLookup = viewModel::lookupGoogleTranslate,
+                onAddToDeck = viewModel::addDictionaryEntryToDeck,
+                onCreateFolderAndAdd = viewModel::createFolderAndAddDictionaryEntry
             )
         }
 

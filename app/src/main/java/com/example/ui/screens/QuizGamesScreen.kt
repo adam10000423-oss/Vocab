@@ -74,8 +74,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -112,6 +119,7 @@ fun QuizGamesScreen(
     onOpenDeckManagement: (Long) -> Unit = {},
     onJumpToStudy: (Long?) -> Unit = {},
     onSpeak: (String) -> Unit = {},
+    onSpeakAnswer: (Flashcard, Boolean) -> Unit = { _, _ -> },
     onStopSpeaking: () -> Unit = {},
     onWrongAnswer: (Flashcard) -> Unit = {},
     onGameActiveChange: (Boolean) -> Unit = {},
@@ -253,7 +261,8 @@ fun QuizGamesScreen(
                         QuizPlayMode.MATCH -> DynamicWordMatchingGameView(
                             cards = deckCards,
                             wrongCardsPool = emptyList(),
-                            onAddWrongCard = onWrongAnswer
+                            onAddWrongCard = onWrongAnswer,
+                            onSpeakAnswer = { onSpeakAnswer(it, false) }
                         )
                         null -> Unit
                         else -> IndependentQuizView(
@@ -261,6 +270,7 @@ fun QuizGamesScreen(
                             cards = deckCards,
                             onWrongAnswer = onWrongAnswer,
                             onSpeak = onSpeak,
+                            onSpeakAnswer = onSpeakAnswer,
                             onFinish = {
                                 onStopSpeaking()
                                 activeGameDeckIds = emptySet()
@@ -598,29 +608,61 @@ private fun IndependentQuizView(
     cards: List<Flashcard>,
     onWrongAnswer: (Flashcard) -> Unit,
     onSpeak: (String) -> Unit,
+    onSpeakAnswer: (Flashcard, Boolean) -> Unit,
     onFinish: () -> Unit
 ) {
     // Keep one stable shuffled question order for the whole play session. Wrong-answer
     // persistence updates card fields in the parent state; using a card hash here made
     // that update rebuild and reshuffle the list, which looked like an automatic skip.
     val questionSetIds = cards.map { it.id }.sorted()
-    val eligible = remember(mode, questionSetIds) {
+    val initialEligible = remember(mode, questionSetIds) {
         eligibleCardsForMode(mode, cards).shuffled()
     }
-    var questionIndex by remember(mode, eligible.map { it.id }) { mutableIntStateOf(0) }
-    var correctCount by remember(mode, eligible.map { it.id }) { mutableIntStateOf(0) }
+    var roundIds by remember(mode, questionSetIds) { mutableStateOf(initialEligible.map { it.id }) }
+    val eligible = roundIds.mapNotNull { id -> cards.firstOrNull { it.id == id } }
+    var questionIndex by remember(mode, roundIds) { mutableIntStateOf(0) }
+    var correctCount by remember(mode, roundIds) { mutableIntStateOf(0) }
+    var wrongCardIds by remember(mode, questionSetIds) { mutableStateOf<Set<Long>>(emptySet()) }
     var selectedOption by remember(mode, questionIndex) { mutableStateOf<String?>(null) }
     var typedAnswer by remember(mode, questionIndex) { mutableStateOf("") }
     var answerResult by remember(mode, questionIndex) { mutableStateOf<Boolean?>(null) }
     var wrongReported by remember(mode, questionIndex) { mutableStateOf(false) }
     var selectedTokenIndices by remember(mode, questionIndex) { mutableStateOf<List<Int>>(emptyList()) }
     var canAdvance by remember(mode, questionIndex) { mutableStateOf(false) }
+    val answerFocusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    val isTypingMode = mode in setOf(
+        QuizPlayMode.CHINESE_TYPE_ENGLISH,
+        QuizPlayMode.CLOZE_TYPING,
+        QuizPlayMode.LISTENING_SPELLING
+    )
+
+    LaunchedEffect(questionIndex, roundIds, isTypingMode) {
+        if (isTypingMode && questionIndex < eligible.size) {
+            delay(120)
+            answerFocusRequester.requestFocus()
+            keyboardController?.show()
+        }
+    }
 
     LaunchedEffect(answerResult, questionIndex) {
         canAdvance = false
         if (answerResult != null) {
             delay(450)
             canAdvance = true
+        }
+    }
+
+    val answeredCard = eligible.getOrNull(questionIndex)
+    LaunchedEffect(answerResult, answeredCard?.id) {
+        if (answerResult != null && answeredCard != null) {
+            val sentenceQuestion = mode in setOf(
+                QuizPlayMode.CLOZE_CHOICE,
+                QuizPlayMode.CLOZE_TYPING,
+                QuizPlayMode.SENTENCE_ORDER
+            )
+            onSpeakAnswer(answeredCard, sentenceQuestion)
         }
     }
 
@@ -662,6 +704,17 @@ private fun IndependentQuizView(
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold
                     )
+                    if (wrongCardIds.isNotEmpty()) {
+                        OutlinedButton(
+                            onClick = {
+                                roundIds = wrongCardIds.shuffled()
+                                wrongCardIds = emptySet()
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("繼續練習錯題（${wrongCardIds.size}）")
+                        }
+                    }
                     Button(onClick = onFinish, modifier = Modifier.fillMaxWidth()) {
                         Text("返回測驗")
                     }
@@ -721,6 +774,7 @@ private fun IndependentQuizView(
         if (correct) correctCount++
         else if (!wrongReported) {
             wrongReported = true
+            wrongCardIds = wrongCardIds + card.id
             onWrongAnswer(card)
         }
     }
@@ -911,7 +965,10 @@ private fun IndependentQuizView(
                     supportingText = { Text("不分大小寫，但必須完整輸入") },
                     singleLine = true,
                     enabled = answerResult == null,
-                    modifier = Modifier.fillMaxWidth()
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(fontFamily = FontFamily.Default),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { if (typedAnswer.isNotBlank()) submit() }),
+                    modifier = Modifier.fillMaxWidth().focusRequester(answerFocusRequester)
                 )
             }
         }
@@ -1668,7 +1725,8 @@ private fun SpellingQuizView(
 private fun DynamicWordMatchingGameView(
     cards: List<Flashcard>,
     wrongCardsPool: List<Flashcard>,
-    onAddWrongCard: (Flashcard) -> Unit
+    onAddWrongCard: (Flashcard) -> Unit,
+    onSpeakAnswer: (Flashcard) -> Unit
 ) {
     val emptySlot = 0L
     val eligibleCards = cards
@@ -1845,6 +1903,7 @@ private fun DynamicWordMatchingGameView(
     fun evaluatePair(wordId: Long?, definitionId: Long?) {
         if (wordId == null || definitionId == null || wrongWordId != null) return
         if (areCompatible(wordId, definitionId)) {
+            cardById[wordId]?.let(onSpeakAnswer)
             refillMatchedSlots(wordId, definitionId)
             matchedCount++
             selectedWordId = null

@@ -53,6 +53,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -90,6 +91,7 @@ fun FlashcardReviewScreen(
     val responsive = rememberResponsiveLayout()
     var isFlipped by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    val hostView = LocalView.current
     val sessionStore = remember(context) { LearningSessionStore(context) }
     var remainingCardIds by remember(sessionScopeId) { mutableStateOf<List<Long>>(emptyList()) }
     var unfamiliarCardIds by remember(sessionScopeId) { mutableStateOf<Set<Long>>(emptySet()) }
@@ -117,8 +119,13 @@ fun FlashcardReviewScreen(
     }
     var orderDialogExitRequested by remember(sessionScopeId) { mutableStateOf(false) }
 
-    DisposableEffect(Unit) {
-        onDispose { onStopSpeaking() }
+    DisposableEffect(hostView) {
+        val previousKeepScreenOn = hostView.keepScreenOn
+        hostView.keepScreenOn = true
+        onDispose {
+            hostView.keepScreenOn = previousKeepScreenOn
+            onStopSpeaking()
+        }
     }
 
     fun leaveReview(action: () -> Unit) {

@@ -7,6 +7,7 @@ import com.example.data.AppDatabase
 import com.example.data.VocabularyRepository
 import com.example.data.dictionary.DictionaryEngine
 import com.example.data.dictionary.DictionaryEntry
+import com.example.data.dictionary.GoogleTranslateLookupService
 import com.example.data.entity.Deck
 import com.example.data.entity.Flashcard
 import com.example.data.entity.StudyLog
@@ -24,6 +25,7 @@ import com.example.util.OcrCardCandidate
 import com.example.widgets.VocabWidgetProvider
 import com.example.util.OcrWordParser
 import com.example.util.TtsManager
+import com.example.util.SpeechSegment
 import com.example.notifications.StudyReminderScheduler
 import android.content.Context
 import android.net.Uri
@@ -726,17 +728,21 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
-    fun testAiConnection() {
-        val config = selectedAiConfig(settings.value)
+    fun testAiConnection(credentialId: String? = null) {
+        val config = if (credentialId == null) {
+            selectedAiConfig(settings.value)
+        } else {
+            personalAiConfigs(settings.value).firstOrNull { it.credentialId == credentialId }
+        }
         if (config == null) {
-            _aiConnectionStatus.value = "請先儲存 API Key"
+            _aiConnectionStatus.value = "找不到這組 API Key，請重新加入"
             return
         }
         viewModelScope.launch {
             _aiConnectionStatus.value = "正在測試 ${config.provider.displayName}..."
             val result = DirectAiService.test(config)
             if (result.isSuccess) {
-                _aiConnectionStatus.value = "文字與圖片測試成功，${config.model} 可以使用"
+                _aiConnectionStatus.value = "連線測試成功，${config.model} 可以使用"
                 DirectAiService.refreshUsage(config)
                 refreshAiProfiles(settings.value)
             } else {
@@ -947,6 +953,64 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
+    suspend fun lookupGoogleTranslate(word: String): Result<DictionaryEntry> = runCatching {
+        GoogleTranslateLookupService.lookup(word).let { GoogleTranslateLookupService.translateExample(it) }
+    }
+
+    fun addDictionaryEntryToDeck(entry: DictionaryEntry, deckId: Long, onComplete: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            runCatching {
+                val now = System.currentTimeMillis()
+                repository.insertCardsDeduplicating(
+                    listOf(
+                        Flashcard(
+                            deckId = deckId,
+                            word = entry.word.trim(),
+                            phonetic = entry.phonetic.trim(),
+                            partOfSpeech = entry.partOfSpeech.trim(),
+                            definition = entry.definition.trim(),
+                            exampleSentence = entry.exampleSentence.trim(),
+                            exampleTranslation = entry.exampleTranslation.trim(),
+                            createdAt = now,
+                            nextReviewTimestamp = now,
+                            sortOrder = repository.nextSortOrder(deckId, 1)
+                        )
+                    )
+                ) > 0
+            }.onSuccess {
+                _dataMessage.value = if (it) "已加入資料夾" else "這個資料夾已有相同單字"
+                onComplete(it)
+            }.onFailure {
+                _dataMessage.value = "加入失敗：${it.message ?: "未知錯誤"}"
+                onComplete(false)
+            }
+        }
+    }
+
+    fun createFolderAndAddDictionaryEntry(
+        courseName: String,
+        folderName: String,
+        description: String,
+        colorHex: String,
+        entry: DictionaryEntry,
+        onComplete: (Boolean) -> Unit = {}
+    ) = createFolderAndCopyCard(
+        courseName = courseName,
+        folderName = folderName,
+        description = description,
+        colorHex = colorHex,
+        card = Flashcard(
+            deckId = 0,
+            word = entry.word.trim(),
+            phonetic = entry.phonetic.trim(),
+            partOfSpeech = entry.partOfSpeech.trim(),
+            definition = entry.definition.trim(),
+            exampleSentence = entry.exampleSentence.trim(),
+            exampleTranslation = entry.exampleTranslation.trim()
+        ),
+        onComplete = onComplete
+    )
+
     fun updateDeck(deck: Deck) {
         viewModelScope.launch {
             repository.updateDeck(deck)
@@ -971,6 +1035,44 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
             voiceStyle = value.ttsVoiceStyle
         )
     }
+
+    fun speakCardAnswer(card: Flashcard, includeSentence: Boolean) {
+        val value = settings.value
+        val segments = buildList {
+            if (value.ttsReadWord) add(SpeechSegment(card.word, "en-US"))
+            if (value.ttsReadDefinition && card.definition.isNotBlank()) {
+                add(SpeechSegment(card.definition, "zh-TW"))
+            }
+            if (value.ttsReadPhonetic && card.phonetic.isNotBlank()) {
+                add(SpeechSegment(card.phonetic, "en-US"))
+            }
+            if (value.ttsReadPartOfSpeech && card.partOfSpeech.isNotBlank()) {
+                add(SpeechSegment(expandPartOfSpeechForSpeech(card.partOfSpeech), "en-US"))
+            }
+            if (includeSentence && value.ttsReadExample && card.exampleSentence.isNotBlank()) {
+                add(SpeechSegment(card.exampleSentence, "en-US"))
+            }
+            if (includeSentence && value.ttsReadExampleTranslation && card.exampleTranslation.isNotBlank()) {
+                add(SpeechSegment(card.exampleTranslation, "zh-TW"))
+            }
+        }
+        ttsManager.speakSequence(
+            segments = segments,
+            rate = value.speechRate,
+            voiceName = value.ttsVoiceName,
+            voiceStyle = value.ttsVoiceStyle,
+            repetitions = value.ttsGroupRepetitions
+        )
+    }
+
+    private fun expandPartOfSpeechForSpeech(value: String): String = value
+        .replace(Regex("(?i)\\badj\\.?"), "adjective")
+        .replace(Regex("(?i)\\badv\\.?"), "adverb")
+        .replace(Regex("(?i)\\bvt\\.?"), "transitive verb")
+        .replace(Regex("(?i)\\bvi\\.?"), "intransitive verb")
+        .replace(Regex("(?i)\\bv\\.?"), "verb")
+        .replace(Regex("(?i)\\bn\\.?"), "noun")
+        .replace("/", ", ")
 
     fun stopSpeaking() {
         ttsManager.stop()
