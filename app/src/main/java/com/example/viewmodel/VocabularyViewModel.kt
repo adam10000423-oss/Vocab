@@ -1036,7 +1036,7 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
         )
     }
 
-    fun speakLearningCard(card: Flashcard) {
+    fun speakLearningCard(card: Flashcard, onComplete: () -> Unit = {}) {
         val value = settings.value
         val segments = buildList {
             if (value.ttsReadWord) add(SpeechSegment(card.word, "en-US"))
@@ -1061,7 +1061,8 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
             rate = value.speechRate,
             voiceName = value.ttsVoiceName,
             voiceStyle = value.ttsVoiceStyle,
-            repetitions = value.ttsGroupRepetitions
+            repetitions = value.ttsGroupRepetitions,
+            onComplete = onComplete
         )
     }
 

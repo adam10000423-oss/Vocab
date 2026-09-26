@@ -33,7 +33,9 @@ class TtsManager(context: Context) : TextToSpeech.OnInitListener {
     private var isInitialized = false
     private var pendingSpeech: PendingSpeech? = null
     private var pendingSequence: List<SpeechSegment>? = null
+    private var pendingSequenceOnComplete: (() -> Unit)? = null
     private val speechQueue = ArrayDeque<SpeechSegment>()
+    private var sequenceOnComplete: (() -> Unit)? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     private var sequenceRate = 0.9f
     private var sequenceVoiceName = ""
@@ -42,10 +44,19 @@ class TtsManager(context: Context) : TextToSpeech.OnInitListener {
     val voices: StateFlow<List<TtsVoiceOption>> = _voices.asStateFlow()
 
     override fun onInit(status: Int) {
-        if (status != TextToSpeech.SUCCESS) return
-        val engine = tts ?: return
+        if (status != TextToSpeech.SUCCESS) {
+            finishPendingSequence()
+            return
+        }
+        val engine = tts ?: run {
+            finishPendingSequence()
+            return
+        }
         val result = engine.setLanguage(Locale.US)
-        if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) return
+        if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+            finishPendingSequence()
+            return
+        }
         isInitialized = true
         engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(utteranceId: String?) = Unit
@@ -85,8 +96,17 @@ class TtsManager(context: Context) : TextToSpeech.OnInitListener {
             speak(pending.text, pending.rate, pending.voiceName, pending.voiceStyle)
         }
         pendingSequence?.let { sequence ->
+            val completion = pendingSequenceOnComplete
             pendingSequence = null
-            speakSequence(sequence, sequenceRate, sequenceVoiceName, sequenceVoiceStyle)
+            pendingSequenceOnComplete = null
+            speakSequence(
+                segments = sequence,
+                rate = sequenceRate,
+                voiceName = sequenceVoiceName,
+                voiceStyle = sequenceVoiceStyle,
+                repetitions = 1,
+                onComplete = completion
+            )
         }
     }
 
@@ -96,8 +116,7 @@ class TtsManager(context: Context) : TextToSpeech.OnInitListener {
         voiceName: String = "",
         voiceStyle: String = "NATURAL"
     ) {
-        speechQueue.clear()
-        pendingSequence = null
+        cancelSequence()
         val normalized = text.trim()
         if (
             normalized.isBlank() ||
@@ -129,27 +148,39 @@ class TtsManager(context: Context) : TextToSpeech.OnInitListener {
         rate: Float = 0.9f,
         voiceName: String = "",
         voiceStyle: String = "NATURAL",
-        repetitions: Int = 1
+        repetitions: Int = 1,
+        onComplete: (() -> Unit)? = null
     ) {
         val valid = segments.filter { it.text.isNotBlank() }
-        if (valid.isEmpty()) return
+        if (valid.isEmpty()) {
+            onComplete?.invoke()
+            return
+        }
         sequenceRate = rate.coerceIn(0.5f, 1.5f)
         sequenceVoiceName = voiceName
         sequenceVoiceStyle = voiceStyle
         val repeated = List(repetitions.coerceIn(1, 3)) { valid }.flatten()
         if (!isInitialized) {
             pendingSequence = repeated
+            pendingSequenceOnComplete = onComplete
             return
         }
         tts?.stop()
-        speechQueue.clear()
+        cancelSequence()
+        sequenceOnComplete = onComplete
         speechQueue.addAll(repeated)
         playNextSegment()
     }
 
     private fun playNextSegment() {
-        val engine = tts ?: return
-        val segment = speechQueue.removeFirstOrNull() ?: return
+        val engine = tts ?: run {
+            finishSequence()
+            return
+        }
+        val segment = speechQueue.removeFirstOrNull() ?: run {
+            finishSequence()
+            return
+        }
         val locale = Locale.forLanguageTag(segment.languageTag)
         if (locale.language.equals("en", true)) {
             selectVoice(engine, sequenceVoiceName)
@@ -168,12 +199,34 @@ class TtsManager(context: Context) : TextToSpeech.OnInitListener {
                 else -> 1.0f
             }
         )
-        engine.speak(
+        val result = engine.speak(
             segment.text.trim(),
             TextToSpeech.QUEUE_FLUSH,
             null,
             "vocab_sequence_${System.nanoTime()}"
         )
+        if (result == TextToSpeech.ERROR) mainHandler.post { playNextSegment() }
+    }
+
+    private fun finishPendingSequence() {
+        pendingSequence = null
+        val completion = pendingSequenceOnComplete
+        pendingSequenceOnComplete = null
+        completion?.invoke()
+    }
+
+    private fun finishSequence() {
+        speechQueue.clear()
+        val completion = sequenceOnComplete
+        sequenceOnComplete = null
+        completion?.invoke()
+    }
+
+    private fun cancelSequence() {
+        pendingSequence = null
+        pendingSequenceOnComplete = null
+        speechQueue.clear()
+        sequenceOnComplete = null
     }
 
     private fun selectVoice(engine: TextToSpeech, voiceName: String) {
@@ -197,8 +250,7 @@ class TtsManager(context: Context) : TextToSpeech.OnInitListener {
 
     fun stop() {
         pendingSpeech = null
-        pendingSequence = null
-        speechQueue.clear()
+        cancelSequence()
         tts?.stop()
     }
 
@@ -210,8 +262,7 @@ class TtsManager(context: Context) : TextToSpeech.OnInitListener {
         tts = null
         isInitialized = false
         pendingSpeech = null
-        pendingSequence = null
-        speechQueue.clear()
+        cancelSequence()
         _voices.value = emptyList()
     }
 }

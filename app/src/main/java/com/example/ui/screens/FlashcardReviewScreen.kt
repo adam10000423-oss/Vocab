@@ -83,7 +83,7 @@ fun FlashcardReviewScreen(
     onUndoReview: (Flashcard) -> Unit = {},
     onToggleFavorite: (Flashcard) -> Unit,
     onSpeak: (String) -> Unit,
-    onSpeakLearningCard: (Flashcard) -> Unit = {},
+    onSpeakLearningCard: (Flashcard, () -> Unit) -> Unit = { _, done -> done() },
     onStopSpeaking: () -> Unit = {},
     onBackToDashboard: () -> Unit,
     onOpenQuizGames: (() -> Unit)? = null,
@@ -105,6 +105,7 @@ fun FlashcardReviewScreen(
         mutableStateOf<List<LearningHistoryEntry>>(emptyList())
     }
     var autoPlaying by remember(sessionScopeId) { mutableStateOf(false) }
+    var completedSpeechCardId by remember(sessionScopeId) { mutableStateOf<Long?>(null) }
     val availableCardIds = remember(cards) { cards.map { it.id } }
     val savedRoundAtEntry = remember(sessionScopeId, availableCardIds) {
         sessionStore.loadSaved(sessionScopeId, availableCardIds)
@@ -267,18 +268,32 @@ fun FlashcardReviewScreen(
     }
 
     LaunchedEffect(currentCard?.id, isFlipped, autoSpeak, sessionLoaded) {
+        onStopSpeaking()
+        completedSpeechCardId = null
         if (autoSpeak && isFlipped && sessionLoaded && !roundFinished) {
-            currentCard?.let(onSpeakLearningCard)
+            currentCard?.let { card ->
+                onSpeakLearningCard(card) { completedSpeechCardId = card.id }
+            }
         }
     }
 
-    LaunchedEffect(autoPlaying, currentCard?.id, isFlipped) {
+    LaunchedEffect(autoPlaying) {
+        if (!autoPlaying) onStopSpeaking()
+    }
+
+    LaunchedEffect(autoPlaying, currentCard?.id, isFlipped, autoSpeak, completedSpeechCardId) {
         if (!autoPlaying || currentCard == null || roundFinished) return@LaunchedEffect
-        delay(if (isFlipped) 2_800 else 1_800)
-        if (!autoPlaying) return@LaunchedEffect
         if (!isFlipped) {
+            delay(1_800)
+            if (!autoPlaying) return@LaunchedEffect
             isFlipped = true
-        } else {
+        } else if (!autoSpeak) {
+            delay(2_800)
+            if (!autoPlaying) return@LaunchedEffect
+            answerCurrent(true)
+        } else if (completedSpeechCardId == currentCard.id) {
+            delay(700)
+            if (!autoPlaying) return@LaunchedEffect
             answerCurrent(true)
         }
     }
