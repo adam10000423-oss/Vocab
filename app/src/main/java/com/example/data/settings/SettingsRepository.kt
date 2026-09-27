@@ -47,10 +47,15 @@ class SettingsRepository(private val context: Context) {
         val aiImagePrompt = stringPreferencesKey("ai_image_prompt")
         val ocrPreviewBeforeImport = booleanPreferencesKey("ocr_preview_before_import")
         val pdfPageLimit = intPreferencesKey("pdf_page_limit")
+        val dictionarySource = stringPreferencesKey("dictionary_source")
         val autoSpeak = booleanPreferencesKey("auto_speak")
         val speechRate = floatPreferencesKey("speech_rate")
         val ttsVoiceStyle = stringPreferencesKey("tts_voice_style")
         val ttsVoiceName = stringPreferencesKey("tts_voice_name")
+        val ttsFrontReadWord = booleanPreferencesKey("tts_front_read_word")
+        val ttsFrontSpellWord = booleanPreferencesKey("tts_front_spell_word")
+        val ttsFrontReadPartOfSpeech = booleanPreferencesKey("tts_front_read_part_of_speech")
+        val ttsFrontRepetitions = intPreferencesKey("tts_front_repetitions")
         val ttsReadWord = booleanPreferencesKey("tts_read_word")
         val ttsSpellWord = booleanPreferencesKey("tts_spell_word")
         val ttsReadDefinition = booleanPreferencesKey("tts_read_definition")
@@ -59,6 +64,8 @@ class SettingsRepository(private val context: Context) {
         val ttsReadExample = booleanPreferencesKey("tts_read_example")
         val ttsReadExampleTranslation = booleanPreferencesKey("tts_read_example_translation")
         val ttsGroupRepetitions = intPreferencesKey("tts_group_repetitions")
+        val assistantScopeMode = stringPreferencesKey("assistant_scope_mode")
+        val assistantScopeDeckIds = stringPreferencesKey("assistant_scope_deck_ids")
         val remindersEnabled = booleanPreferencesKey("reminders_enabled")
         val reminderHour = intPreferencesKey("reminder_hour")
         val reminderMinute = intPreferencesKey("reminder_minute")
@@ -116,10 +123,16 @@ class SettingsRepository(private val context: Context) {
             aiImagePrompt = value[Keys.aiImagePrompt] ?: AiPromptDefaults.IMAGE_VOCABULARY_EXTRACTION,
             ocrPreviewBeforeImport = value[Keys.ocrPreviewBeforeImport] ?: true,
             pdfPageLimit = (value[Keys.pdfPageLimit] ?: 20).coerceIn(1, 50),
+            dictionarySource = value[Keys.dictionarySource]
+                ?.takeIf { it in setOf("AUTO", "GOOGLE", "FREE") } ?: "AUTO",
             autoSpeak = value[Keys.autoSpeak] ?: false,
             speechRate = (value[Keys.speechRate] ?: 1f).coerceIn(0.5f, 1.5f),
             ttsVoiceStyle = value[Keys.ttsVoiceStyle] ?: "NATURAL",
             ttsVoiceName = value[Keys.ttsVoiceName] ?: "",
+            ttsFrontReadWord = value[Keys.ttsFrontReadWord] ?: true,
+            ttsFrontSpellWord = value[Keys.ttsFrontSpellWord] ?: false,
+            ttsFrontReadPartOfSpeech = value[Keys.ttsFrontReadPartOfSpeech] ?: false,
+            ttsFrontRepetitions = (value[Keys.ttsFrontRepetitions] ?: 1).coerceIn(1, 3),
             ttsReadWord = value[Keys.ttsReadWord] ?: true,
             ttsSpellWord = value[Keys.ttsSpellWord] ?: false,
             ttsReadDefinition = value[Keys.ttsReadDefinition] ?: true,
@@ -128,6 +141,10 @@ class SettingsRepository(private val context: Context) {
             ttsReadExample = value[Keys.ttsReadExample] ?: true,
             ttsReadExampleTranslation = value[Keys.ttsReadExampleTranslation] ?: true,
             ttsGroupRepetitions = (value[Keys.ttsGroupRepetitions] ?: 2).coerceIn(1, 3),
+            assistantScopeMode = value[Keys.assistantScopeMode]
+                ?.takeIf { it in setOf("ALL", "CUSTOM") } ?: "ALL",
+            assistantScopeDeckIds = value[Keys.assistantScopeDeckIds]
+                ?.split(',')?.mapNotNull(String::toLongOrNull)?.toSet().orEmpty(),
             remindersEnabled = value[Keys.remindersEnabled] ?: false,
             reminderHour = (value[Keys.reminderHour] ?: 20).coerceIn(0, 23),
             reminderMinute = (value[Keys.reminderMinute] ?: 0).coerceIn(0, 59),
@@ -150,6 +167,9 @@ class SettingsRepository(private val context: Context) {
             "usePersonalAiApi" -> Keys.usePersonalAiApi
             "ocrPreviewBeforeImport" -> Keys.ocrPreviewBeforeImport
             "autoSpeak" -> Keys.autoSpeak
+            "ttsFrontReadWord" -> Keys.ttsFrontReadWord
+            "ttsFrontSpellWord" -> Keys.ttsFrontSpellWord
+            "ttsFrontReadPartOfSpeech" -> Keys.ttsFrontReadPartOfSpeech
             "ttsReadWord" -> Keys.ttsReadWord
             "ttsSpellWord" -> Keys.ttsSpellWord
             "ttsReadDefinition" -> Keys.ttsReadDefinition
@@ -249,6 +269,18 @@ class SettingsRepository(private val context: Context) {
         it[Keys.ttsVoiceName] = name.trim().take(200)
     }
 
+    suspend fun setDictionarySource(source: String) = context.settingsDataStore.edit {
+        it[Keys.dictionarySource] = source.takeIf { value ->
+            value in setOf("AUTO", "GOOGLE", "FREE")
+        } ?: "AUTO"
+    }
+
+    suspend fun setAssistantScope(allSelected: Boolean, deckIds: Set<Long>) =
+        context.settingsDataStore.edit {
+            it[Keys.assistantScopeMode] = if (allSelected) "ALL" else "CUSTOM"
+            it[Keys.assistantScopeDeckIds] = deckIds.sorted().joinToString(",")
+        }
+
     suspend fun setReminderTime(hour: Int, minute: Int) = context.settingsDataStore.edit {
         it[Keys.reminderHour] = hour.coerceIn(0, 23)
         it[Keys.reminderMinute] = minute.coerceIn(0, 59)
@@ -276,6 +308,7 @@ class SettingsRepository(private val context: Context) {
             "reminderHour" -> it[Keys.reminderHour] = number.coerceIn(0, 23)
             "reminderMinute" -> it[Keys.reminderMinute] = number.coerceIn(0, 59)
             "ttsGroupRepetitions" -> it[Keys.ttsGroupRepetitions] = number.coerceIn(1, 3)
+            "ttsFrontRepetitions" -> it[Keys.ttsFrontRepetitions] = number.coerceIn(1, 3)
             else -> error("Unknown integer setting: $name")
         }
     }

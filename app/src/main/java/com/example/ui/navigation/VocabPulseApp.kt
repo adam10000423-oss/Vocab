@@ -134,6 +134,7 @@ fun VocabApp(
 
     var currentTab by remember { mutableIntStateOf(0) }
     var editingCard by remember { mutableStateOf<Flashcard?>(null) }
+    var pendingRevealCardId by remember { mutableStateOf<Long?>(null) }
     var pendingSharedText by remember { mutableStateOf<String?>(null) }
     var pendingQuizDeckIds by remember { mutableStateOf<Set<Long>?>(null) }
     var pendingQuizTitle by remember { mutableStateOf("") }
@@ -307,7 +308,10 @@ fun VocabApp(
                                 grammarQuizFilterIds = null
                                 navController.navigate(Routes.GRAMMAR_QUIZ)
                             },
-                            onWritingCheck = { currentTab = 3 },
+                            onWritingCheck = {
+                                currentTab = 3
+                                navController.navigate(Routes.GRAMMAR_WRITING_CHECK)
+                            },
                             onSeeAllNotes = { currentTab = 1 }
                         )
                     } else DashboardScreen(
@@ -585,6 +589,7 @@ fun VocabApp(
                 onUndoReview = viewModel::undoCardReview,
                 onToggleFavorite = viewModel::toggleFavorite,
                 onSpeak = viewModel::speakText,
+                onSpeakLearningCardFront = viewModel::speakLearningCardFront,
                 onSpeakLearningCard = viewModel::speakLearningCard,
                 onStopSpeaking = viewModel::stopSpeaking,
                 onBackToDashboard = {
@@ -617,8 +622,13 @@ fun VocabApp(
                 decks = decks,
                 cards = allCards,
                 onBack = { navController.popBackStack() },
-                onLookup = viewModel::lookupGoogleTranslate,
+                onLookup = viewModel::lookupDictionary,
                 onAiComplete = viewModel::fetchAiWordDetails,
+                onOpenLocalCard = { card ->
+                    viewModel.selectDeck(card.deckId)
+                    pendingRevealCardId = card.id
+                    navController.navigate(Routes.CARD_LIST) { launchSingleTop = true }
+                },
                 onAddToDeck = viewModel::addDictionaryEntryToDeck,
                 onCreateFolderAndAdd = viewModel::createFolderAndAddDictionaryEntry
             )
@@ -733,6 +743,8 @@ fun VocabApp(
                 cards = allCards,
                 decks = decks,
                 selectedDeckId = selectedDeckId,
+                revealCardId = pendingRevealCardId,
+                onRevealHandled = { pendingRevealCardId = null },
                 onSelectDeck = { id ->
                     viewModel.selectDeck(id)
                     reviewDeckIds = null
@@ -747,6 +759,7 @@ fun VocabApp(
                 onCreateFolderAndMoveCards = viewModel::createFolderAndMoveCards,
                 onEditCard = { card ->
                     editingCard = card
+                    pendingRevealCardId = card.id
                     navController.navigate(Routes.ADD_EDIT_CARD)
                 },
                 onSpeak = viewModel::speakText,
@@ -795,6 +808,7 @@ fun VocabApp(
         composable(Routes.ADD_EDIT_CARD) {
             AddEditCardScreen(
                 editingCard = editingCard,
+                initialFocusCardId = editingCard?.id,
                 initialSharedText = pendingSharedText,
                 allCards = allCards,
                 decks = decks,
@@ -825,6 +839,7 @@ fun VocabApp(
                 onBackgroundAppearanceChange = viewModel::updateBackgroundAppearance,
                 onFontAppearanceChange = viewModel::updateFontAppearance,
                 onSpeechRateChange = viewModel::updateSpeechRate,
+                onDictionarySourceChange = viewModel::updateDictionarySource,
                 ttsVoices = ttsVoices,
                 onTtsVoiceStyleChange = viewModel::updateTtsVoiceStyle,
                 onTtsVoiceNameChange = viewModel::updateTtsVoiceName,
@@ -931,7 +946,10 @@ fun VocabApp(
                 questions = editingQuestions,
                 patterns = grammarPatterns.filter { it.grammarNoteId == editingGrammar?.id },
                 examples = grammarExamples.filter { it.grammarNoteId == editingGrammar?.id },
-                courses = decks.map { it.category }.filter(String::isNotBlank).distinct(),
+                courses = (decks.map { it.category } + grammarNotes.map { it.course })
+                    .filter(String::isNotBlank).distinct(),
+                categories = grammarNotes.map { it.category }.filter(String::isNotBlank).distinct(),
+                levels = grammarNotes.map { it.level }.filter(String::isNotBlank).distinct(),
                 initialShowAiDialog = launchGrammarAi,
                 onGenerateAi = viewModel::generateGrammarDraft,
                 onScanImages = viewModel::generateGrammarDraftFromImages,

@@ -83,6 +83,7 @@ fun FlashcardReviewScreen(
     onUndoReview: (Flashcard) -> Unit = {},
     onToggleFavorite: (Flashcard) -> Unit,
     onSpeak: (String) -> Unit,
+    onSpeakLearningCardFront: (Flashcard, () -> Unit) -> Unit = { _, done -> done() },
     onSpeakLearningCard: (Flashcard, () -> Unit) -> Unit = { _, done -> done() },
     onStopSpeaking: () -> Unit = {},
     onBackToDashboard: () -> Unit,
@@ -105,6 +106,7 @@ fun FlashcardReviewScreen(
         mutableStateOf<List<LearningHistoryEntry>>(emptyList())
     }
     var autoPlaying by remember(sessionScopeId) { mutableStateOf(false) }
+    var completedFrontSpeechCardId by remember(sessionScopeId) { mutableStateOf<Long?>(null) }
     var completedSpeechCardId by remember(sessionScopeId) { mutableStateOf<Long?>(null) }
     val availableCardIds = remember(cards) { cards.map { it.id } }
     val savedRoundAtEntry = remember(sessionScopeId, availableCardIds) {
@@ -269,10 +271,12 @@ fun FlashcardReviewScreen(
 
     LaunchedEffect(currentCard?.id, isFlipped, autoSpeak, sessionLoaded) {
         onStopSpeaking()
+        completedFrontSpeechCardId = null
         completedSpeechCardId = null
-        if (autoSpeak && isFlipped && sessionLoaded && !roundFinished) {
+        if (autoSpeak && sessionLoaded && !roundFinished) {
             currentCard?.let { card ->
-                onSpeakLearningCard(card) { completedSpeechCardId = card.id }
+                if (isFlipped) onSpeakLearningCard(card) { completedSpeechCardId = card.id }
+                else onSpeakLearningCardFront(card) { completedFrontSpeechCardId = card.id }
             }
         }
     }
@@ -281,12 +285,16 @@ fun FlashcardReviewScreen(
         if (!autoPlaying) onStopSpeaking()
     }
 
-    LaunchedEffect(autoPlaying, currentCard?.id, isFlipped, autoSpeak, completedSpeechCardId) {
+    LaunchedEffect(autoPlaying, currentCard?.id, isFlipped, autoSpeak, completedFrontSpeechCardId, completedSpeechCardId) {
         if (!autoPlaying || currentCard == null || roundFinished) return@LaunchedEffect
         if (!isFlipped) {
-            delay(1_800)
-            if (!autoPlaying) return@LaunchedEffect
-            isFlipped = true
+            if (!autoSpeak) {
+                delay(1_800)
+                if (autoPlaying) isFlipped = true
+            } else if (completedFrontSpeechCardId == currentCard.id) {
+                delay(350)
+                if (autoPlaying) isFlipped = true
+            }
         } else if (!autoSpeak) {
             delay(2_800)
             if (!autoPlaying) return@LaunchedEffect
@@ -383,7 +391,7 @@ fun FlashcardReviewScreen(
                 FlipCard(
                     card = currentCard,
                     isFlipped = isFlipped,
-                    onFlip = { isFlipped = !isFlipped },
+                    onFlip = { onStopSpeaking(); isFlipped = !isFlipped },
                     onSpeak = onSpeak,
                     onToggleFavorite = { onToggleFavorite(currentCard) },
                     onSwipeLeft = {

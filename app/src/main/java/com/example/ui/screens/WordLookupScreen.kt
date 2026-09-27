@@ -68,6 +68,7 @@ fun WordLookupScreen(
     onBack: () -> Unit,
     onLookup: suspend (String) -> Result<DictionaryEntry>,
     onAiComplete: suspend (String) -> DictionaryEntry?,
+    onOpenLocalCard: (Flashcard) -> Unit,
     onAddToDeck: (DictionaryEntry, Long, (Boolean) -> Unit) -> Unit,
     onCreateFolderAndAdd: (String, String, String, String, DictionaryEntry, (Boolean) -> Unit) -> Unit
 ) {
@@ -165,7 +166,7 @@ fun WordLookupScreen(
                     OutlinedTextField(
                         value = query,
                         onValueChange = { query = it; searched = false },
-                        placeholder = { Text("搜尋英文單字") },
+                        placeholder = { Text("搜尋英文單字或中文解釋") },
                         trailingIcon = {
                             IconButton(onClick = { if (query.isNotBlank()) search() }) {
                                 if (loading) CircularProgressIndicator(modifier = Modifier.padding(8.dp))
@@ -214,10 +215,12 @@ fun WordLookupScreen(
                 error?.let { item { Text(it, color = MaterialTheme.colorScheme.error) } }
                 if (localMatches.isNotEmpty()) {
                     item { Text("我的單字庫", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
-                    items(localMatches, key = { it.id }) { card -> LocalDictionaryResult(card) }
+                    items(localMatches, key = { it.id }) { card ->
+                        LocalDictionaryResult(card = card, onClick = { onOpenLocalCard(card) })
+                    }
                 }
                 result?.let { entry ->
-                    item { Text("Google 翻譯", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
+                    item { Text(result?.category ?: "線上字典", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
                     item {
                         DictionaryResultCard(
                             entry = entry,
@@ -244,8 +247,9 @@ fun WordLookupScreen(
 }
 
 @Composable
-private fun LocalDictionaryResult(card: Flashcard) {
+private fun LocalDictionaryResult(card: Flashcard, onClick: () -> Unit) {
     Card(
+        onClick = onClick,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .55f)),
         shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()
     ) {
@@ -273,7 +277,7 @@ private fun DictionaryResultCard(entry: DictionaryEntry, aiLoading: Boolean, onA
             Text(entry.definition, style = MaterialTheme.typography.titleMedium)
             if (entry.exampleSentence.isNotBlank()) Text(entry.exampleSentence)
             if (entry.exampleTranslation.isNotBlank()) Text(entry.exampleTranslation, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("資料來源：Google 翻譯網頁", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("資料來源：${entry.category}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = onAiComplete, enabled = !aiLoading, modifier = Modifier.weight(1f)) {
                     if (aiLoading) CircularProgressIndicator(modifier = Modifier.padding(4.dp)) else Icon(Icons.Default.AutoAwesome, null)

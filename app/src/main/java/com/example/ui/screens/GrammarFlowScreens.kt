@@ -103,14 +103,11 @@ fun GrammarImportScreen(
                 }
             }
             item {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    GrammarSourceButton(Icons.Default.CameraAlt, "拍照", ::launchCamera, Modifier.weight(1f))
-                    GrammarSourceButton(Icons.Default.DocumentScanner, "掃描文件", ::launchScanner, Modifier.weight(1f))
-                }
-            }
-            item { Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                GrammarSourceButton(Icons.Default.PhotoLibrary, "相片", { gallery.launch("image/*") }, Modifier.weight(1f))
-                GrammarSourceButton(Icons.Default.FileOpen, "檔案", { files.launch(arrayOf("image/*", "application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain")) }, Modifier.weight(1f))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    FilledTonalIconButton(onClick = ::launchCamera, modifier = Modifier.size(54.dp)) { Icon(Icons.Default.CameraAlt, "拍照") }
+                    FilledTonalIconButton(onClick = ::launchScanner, modifier = Modifier.size(54.dp)) { Icon(Icons.Default.DocumentScanner, "掃描") }
+                    FilledTonalIconButton(onClick = { gallery.launch("image/*") }, modifier = Modifier.size(54.dp)) { Icon(Icons.Default.PhotoLibrary, "圖片") }
+                    GrammarSourceButton(Icons.Default.FileOpen, "檔案", { files.launch(arrayOf("image/*", "application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain")) }, Modifier.weight(1f))
             } }
             item { Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 GrammarSourceButton(Icons.Default.ContentPaste, "貼上文字", { showPasteDialog = true }, Modifier.weight(1f))
@@ -326,7 +323,17 @@ fun GrammarQuizFlowScreen(
             Column(Modifier.padding(padding).padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 LinearProgressIndicator(progress = { (index + 1f) / queue.size.coerceAtLeast(1) }, modifier = Modifier.fillMaxWidth())
                 Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))) { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) { AssistChip(onClick = {}, label = { Text(if (choices.isEmpty()) "填空" else "選擇") }); Text(question.prompt.replace("{{answer}}", "____"), style = MaterialTheme.typography.titleLarge); if (question.translation.isNotBlank()) Text(question.translation, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
-                if (choices.isNotEmpty()) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { choices.chunked(2).forEach { row -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { row.forEach { choice -> FilterChip(selected = selected == choice, enabled = !checked, onClick = { selected = choice }, label = { Text(choice) }, modifier = Modifier.weight(1f)) }; if (row.size == 1) Spacer(Modifier.weight(1f)) } } }
+                if (choices.isNotEmpty()) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    choices.forEach { choice ->
+                        FilterChip(
+                            selected = selected == choice,
+                            enabled = !checked,
+                            onClick = { selected = choice },
+                            label = { Text(choice, modifier = Modifier.padding(vertical = 5.dp)) },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
                 else OutlinedTextField(input, { input = it }, enabled = !checked, label = { Text("輸入完整答案") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 if (hint && !checked) Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) { Row(Modifier.padding(14.dp)) { Icon(Icons.Default.Lightbulb, null); Spacer(Modifier.width(8.dp)); Text(question.explanation.ifBlank { "想想這個時間或語境需要使用哪一種文法形式。" }) } }
                 if (checked) Card(colors = CardDefaults.cardColors(containerColor = if (correct) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer)) { Column(Modifier.fillMaxWidth().padding(14.dp)) { Text(if (correct) "答對了" else "答錯了", fontWeight = FontWeight.Bold); if (!correct) Text("正確答案：${question.answer}"); if (question.explanation.isNotBlank()) Text(question.explanation) } }

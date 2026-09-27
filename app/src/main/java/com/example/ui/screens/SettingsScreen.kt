@@ -105,6 +105,7 @@ fun SettingsScreen(
     onBackgroundAppearanceChange: (Float, Float) -> Unit,
     onFontAppearanceChange: (String, String, Float) -> Unit,
     onSpeechRateChange: (Float) -> Unit,
+    onDictionarySourceChange: (String) -> Unit,
     ttsVoices: List<TtsVoiceOption>,
     onTtsVoiceStyleChange: (String) -> Unit,
     onTtsVoiceNameChange: (String) -> Unit,
@@ -820,6 +821,28 @@ fun SettingsScreen(
                 }
             }
             item {
+                SettingsSection("單字查詢", initiallyExpanded = false) {
+                    SettingDropdown(
+                        label = "線上字典來源",
+                        value = settings.dictionarySource,
+                        options = listOf("AUTO", "GOOGLE", "FREE"),
+                        optionText = {
+                            when (it) {
+                                "GOOGLE" -> "Google 翻譯"
+                                "FREE" -> "Free Dictionary（英文解釋）"
+                                else -> "自動選擇（Google 失敗時切換備用字典）"
+                            }
+                        },
+                        onSelected = onDictionarySourceChange
+                    )
+                    Text(
+                        "自動模式遇到 429、逾時或查無結果時會改用免費英文字典；中文內容可再使用 AI 補齊。Cambridge 需官方 API 授權，因此不會以不穩定的網頁爬取方式內建。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            item {
                 SettingsSection("發音與提醒") {
                     SettingSwitch("翻卡後自動朗讀", settings.autoSpeak) { onBooleanChange("autoSpeak", it) }
                     SettingDropdown(
@@ -860,7 +883,19 @@ fun SettingsScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Text("學習卡翻到背面時的自動朗讀", fontWeight = FontWeight.Bold)
+                    Text("學習卡正面自動朗讀", fontWeight = FontWeight.Bold)
+                    Text(
+                        "自動播放會等正面內容全部念完才翻到背面。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    SettingSwitch("英文單字", settings.ttsFrontReadWord) { onBooleanChange("ttsFrontReadWord", it) }
+                    SettingSwitch("拼音（逐字母拼讀）", settings.ttsFrontSpellWord) { onBooleanChange("ttsFrontSpellWord", it) }
+                    SettingSwitch("詞性", settings.ttsFrontReadPartOfSpeech) { onBooleanChange("ttsFrontReadPartOfSpeech", it) }
+                    NumberSetting("正面朗讀次數", settings.ttsFrontRepetitions, 1, 1..3) {
+                        onIntChange("ttsFrontRepetitions", it)
+                    }
+                    Text("學習卡背面自動朗讀", fontWeight = FontWeight.Bold)
                     Text(
                         "需先開啟「翻卡後自動朗讀」；下列內容會依順序組成一組播放。",
                         style = MaterialTheme.typography.bodySmall,

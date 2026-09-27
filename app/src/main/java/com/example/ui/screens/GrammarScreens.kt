@@ -9,6 +9,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -26,6 +27,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -36,6 +38,7 @@ import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
 import kotlinx.coroutines.launch
 import java.io.File
+import kotlin.math.abs
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 
@@ -473,15 +476,56 @@ private fun GrammarFilterMenu(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun GrammarEditorScreen(note: GrammarNote?, questions: List<GrammarQuestion>, patterns: List<GrammarPattern>, examples: List<GrammarExample>, courses: List<String>, initialShowAiDialog: Boolean = false, onGenerateAi: suspend (String) -> GrammarDraft, onScanImages: suspend (List<Uri>) -> GrammarDraft, onSave: (GrammarNote, List<GrammarQuestionDraft>, List<GrammarPatternDraft>) -> Unit, onBack: () -> Unit) {
+private fun GrammarEditableMenu(
+    label: String,
+    value: String,
+    options: List<String>,
+    onSelect: (String) -> Unit,
+    onAddRequested: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }, modifier = modifier) {
+        OutlinedTextField(
+            value = value,
+            onValueChange = {},
+            readOnly = true,
+            singleLine = true,
+            label = { Text(label) },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+            modifier = Modifier.menuAnchor().fillMaxWidth()
+        )
+        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            options.filter(String::isNotBlank).distinct().forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    onClick = { onSelect(option); expanded = false }
+                )
+            }
+            HorizontalDivider()
+            DropdownMenuItem(
+                text = { Text("新增$label…") },
+                leadingIcon = { Icon(Icons.Default.Add, null) },
+                onClick = { expanded = false; onAddRequested() }
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun GrammarEditorScreen(note: GrammarNote?, questions: List<GrammarQuestion>, patterns: List<GrammarPattern>, examples: List<GrammarExample>, courses: List<String>, categories: List<String> = emptyList(), levels: List<String> = emptyList(), initialShowAiDialog: Boolean = false, onGenerateAi: suspend (String) -> GrammarDraft, onScanImages: suspend (List<Uri>) -> GrammarDraft, onSave: (GrammarNote, List<GrammarQuestionDraft>, List<GrammarPatternDraft>) -> Unit, onBack: () -> Unit) {
     val context = LocalContext.current; val scope = rememberCoroutineScope()
     var course by rememberSaveable(note?.id) { mutableStateOf(note?.course ?: courses.firstOrNull().orEmpty()) }; var title by rememberSaveable(note?.id) { mutableStateOf(note?.title.orEmpty()) }
-    var courseMenu by remember { mutableStateOf(false) }
     val linkedCourses = remember(courses) { (listOf("通用") + courses).filter(String::isNotBlank).distinct() }
     var summary by rememberSaveable(note?.id) { mutableStateOf(note?.summary.orEmpty()) }; var structure by rememberSaveable(note?.id) { mutableStateOf(note?.structure.orEmpty()) }; var usage by rememberSaveable(note?.id) { mutableStateOf(note?.usage.orEmpty()) }
     var example by rememberSaveable(note?.id) { mutableStateOf(note?.exampleSentence.orEmpty()) }; var translation by rememberSaveable(note?.id) { mutableStateOf(note?.exampleTranslation.orEmpty()) }; var mistakes by rememberSaveable(note?.id) { mutableStateOf(note?.commonMistakes.orEmpty()) }; var comparison by rememberSaveable(note?.id) { mutableStateOf(note?.comparison.orEmpty()) }; var tags by rememberSaveable(note?.id) { mutableStateOf(note?.tags.orEmpty()) }
     var category by rememberSaveable(note?.id) { mutableStateOf(note?.category ?: "其他") }
     var level by rememberSaveable(note?.id) { mutableStateOf(note?.level ?: "未分級") }
+    val categoryOptions = remember(categories, note?.category) { (listOf("時態", "句型", "介系詞", "連接詞", "語態", "比較", "其他") + categories + note?.category.orEmpty()).filter(String::isNotBlank).distinct() }
+    val levelOptions = remember(levels, note?.level) { (listOf("初級", "中級", "中高級", "高級", "未分級") + levels + note?.level.orEmpty()).filter(String::isNotBlank).distinct() }
+    var customField by remember { mutableStateOf<String?>(null) }
+    var customValue by remember { mutableStateOf("") }
     val patternDrafts = remember(note?.id, patterns, examples) { mutableStateListOf<GrammarPatternDraft>().apply {
         addAll(patterns.map { pattern -> GrammarPatternDraft(
             title = pattern.title, formula = pattern.formula, meaning = pattern.meaning,
@@ -500,27 +544,68 @@ fun GrammarEditorScreen(note: GrammarNote?, questions: List<GrammarQuestion>, pa
     ) }); if (isEmpty() && note?.questionTemplate?.isNotBlank() == true) add(GrammarQuestionDraft(prompt = note.questionTemplate, translation = note.exampleTranslation, answer = note.answer, acceptedAnswers = note.acceptedAnswers, options = note.options, explanation = note.explanation)) } }
     var aiPrompt by rememberSaveable { mutableStateOf("") }; var showAiDialog by remember { mutableStateOf(initialShowAiDialog) }; var busy by remember { mutableStateOf(false) }; var aiApplied by rememberSaveable(note?.id) { mutableStateOf(false) }; var error by remember { mutableStateOf<String?>(null) }; var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
     var editorSection by rememberSaveable(note?.id) { mutableIntStateOf(0) }
-    fun applyDraft(d: GrammarDraft) { aiApplied = true; title=d.title; category=d.category; level=d.level; summary=d.summary; structure=d.structure; usage=d.usage; example=d.exampleSentence; translation=d.exampleTranslation; mistakes=d.commonMistakes; comparison=d.comparison; tags=d.tags; patternDrafts.clear(); patternDrafts.addAll(d.patterns.ifEmpty { if (d.structure.isBlank()) emptyList() else listOf(GrammarPatternDraft("主要句型", d.structure, d.summary, d.usage, examples = if (d.exampleSentence.isBlank()) emptyList() else listOf(GrammarExampleDraft(d.exampleSentence, d.exampleTranslation)))) }); drafts.clear(); drafts.addAll(d.questions.ifEmpty { if (d.questionTemplate.isBlank()) emptyList() else listOf(GrammarQuestionDraft(prompt=d.questionTemplate, translation=d.exampleTranslation, answer=d.answer, acceptedAnswers=d.acceptedAnswers, options=d.options, explanation=d.explanation, sourceType="AI")) }) }
+    var horizontalDrag by remember { mutableFloatStateOf(0f) }
+    fun applyDraft(d: GrammarDraft, onlyBlank: Boolean = false) {
+        aiApplied = true
+        if (!onlyBlank || title.isBlank()) title=d.title
+        if (!onlyBlank || category.isBlank() || category == "其他") category=d.category
+        if (!onlyBlank || level.isBlank() || level == "未分級") level=d.level
+        if (!onlyBlank || summary.isBlank()) summary=d.summary
+        if (!onlyBlank || structure.isBlank()) structure=d.structure
+        if (!onlyBlank || usage.isBlank()) usage=d.usage
+        if (!onlyBlank || example.isBlank()) example=d.exampleSentence
+        if (!onlyBlank || translation.isBlank()) translation=d.exampleTranslation
+        if (!onlyBlank || mistakes.isBlank()) mistakes=d.commonMistakes
+        if (!onlyBlank || comparison.isBlank()) comparison=d.comparison
+        if (!onlyBlank || tags.isBlank()) tags=d.tags
+        val generatedPatterns=d.patterns.ifEmpty { if (d.structure.isBlank()) emptyList() else listOf(GrammarPatternDraft("主要句型", d.structure, d.summary, d.usage, examples = if (d.exampleSentence.isBlank()) emptyList() else listOf(GrammarExampleDraft(d.exampleSentence, d.exampleTranslation)))) }
+        if (!onlyBlank || patternDrafts.isEmpty()) { patternDrafts.clear(); patternDrafts.addAll(generatedPatterns) }
+        val generatedQuestions=d.questions.ifEmpty { if (d.questionTemplate.isBlank()) emptyList() else listOf(GrammarQuestionDraft(prompt=d.questionTemplate, translation=d.exampleTranslation, answer=d.answer, acceptedAnswers=d.acceptedAnswers, options=d.options, explanation=d.explanation, sourceType="AI")) }
+        if (!onlyBlank || drafts.isEmpty()) { drafts.clear(); drafts.addAll(generatedQuestions) }
+    }
     fun importImages(uris: List<Uri>) { if (uris.isEmpty()) return; scope.launch { busy=true; error=null; runCatching { onScanImages(uris) }.onSuccess(::applyDraft).onFailure { error=it.message ?: "辨識失敗" }; busy=false } }
     val gallery = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { importImages(it) }
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { if (it) pendingCameraUri?.let { u -> importImages(listOf(u)) } }
     val scanner = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { r -> if (r.resultCode == Activity.RESULT_OK) importImages(GmsDocumentScanningResult.fromActivityResultIntent(r.data)?.pages?.map { it.imageUri }.orEmpty()) }
     fun launchCamera() { val f=File(context.cacheDir,"grammar_${System.currentTimeMillis()}.jpg"); pendingCameraUri=FileProvider.getUriForFile(context,"${context.packageName}.fileprovider",f); camera.launch(pendingCameraUri!!) }
     fun launchScanner() { val activity=context.findActivity() ?: return; val o=GmsDocumentScannerOptions.Builder().setGalleryImportAllowed(true).setPageLimit(10).setResultFormats(GmsDocumentScannerOptions.RESULT_FORMAT_JPEG).setScannerMode(GmsDocumentScannerOptions.SCANNER_MODE_FULL).build(); GmsDocumentScanning.getClient(o).getStartScanIntent(activity).addOnSuccessListener { scanner.launch(IntentSenderRequest.Builder(it).build()) }.addOnFailureListener { error=it.message ?: "無法開啟掃描器" } }
-    if (showAiDialog) AlertDialog(onDismissRequest={if(!busy)showAiDialog=false},title={Text("AI 建立文法筆記")},text={Column(verticalArrangement=Arrangement.spacedBy(10.dp)){Text("AI 會產生筆記與多組獨立題目，儲存前都能修改。");OutlinedTextField(aiPrompt,{aiPrompt=it},label={Text("文法與程度")},minLines=3);error?.let{Text(it,color=MaterialTheme.colorScheme.error)}}},confirmButton={Button(enabled=aiPrompt.isNotBlank()&&!busy,onClick={scope.launch{busy=true;error=null;runCatching{onGenerateAi(aiPrompt)}.onSuccess{applyDraft(it);showAiDialog=false}.onFailure{error=it.message?:"AI 產生失敗"};busy=false}}){Text(if(busy)"產生中…" else "產生預覽")}},dismissButton={TextButton(enabled=!busy,onClick={showAiDialog=false}){Text("取消")}})
+    if (customField != null) AlertDialog(
+        onDismissRequest = { customField = null },
+        title = { Text("新增${customField}") },
+        text = { OutlinedTextField(customValue, { customValue = it }, singleLine = true, label = { Text(customField.orEmpty()) }) },
+        confirmButton = { Button(enabled = customValue.isNotBlank(), onClick = {
+            when (customField) { "課程" -> course = customValue.trim(); "分類" -> category = customValue.trim(); "程度" -> level = customValue.trim() }
+            customValue = ""; customField = null
+        }) { Text("套用") } },
+        dismissButton = { TextButton(onClick = { customField = null }) { Text("取消") } }
+    )
+    if (showAiDialog) AlertDialog(onDismissRequest={if(!busy)showAiDialog=false},title={Text("AI 建立或補齊文法")},text={Column(verticalArrangement=Arrangement.spacedBy(10.dp)){Text("輸入主題可建立完整內容；已有內容時也能只補齊空白欄位。");OutlinedTextField(aiPrompt,{aiPrompt=it},label={Text("文法主題與程度")},minLines=3);error?.let{Text(it,color=MaterialTheme.colorScheme.error)}}},confirmButton={Column(horizontalAlignment=Alignment.End){Button(enabled=aiPrompt.isNotBlank()&&!busy,onClick={scope.launch{busy=true;error=null;runCatching{onGenerateAi(aiPrompt)}.onSuccess{applyDraft(it,false);showAiDialog=false}.onFailure{error=it.message?:"AI 產生失敗"};busy=false}}){Text(if(busy)"處理中…" else "依主題生成")};TextButton(enabled=aiPrompt.isNotBlank()&&!busy,onClick={scope.launch{busy=true;error=null;runCatching{onGenerateAi(aiPrompt)}.onSuccess{applyDraft(it,true);showAiDialog=false}.onFailure{error=it.message?:"AI 補齊失敗"};busy=false}}){Text("只補齊空白")}}},dismissButton={TextButton(enabled=!busy,onClick={showAiDialog=false}){Text("取消")}})
     Scaffold(topBar={TopAppBar(title={Text(if(note==null)"新增文法" else "編輯文法")},navigationIcon={IconButton(onClick=onBack){Icon(Icons.AutoMirrored.Filled.ArrowBack,"返回")}},actions={IconButton(onClick={showAiDialog=true}){Icon(Icons.Default.AutoAwesome,"AI 建立")}})},bottomBar={Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(12.dp),horizontalArrangement=Arrangement.spacedBy(10.dp)){OutlinedButton(onClick=onBack,modifier=Modifier.weight(1f)){Text("取消")};Button(enabled=title.isNotBlank()&&!busy,onClick={val q=drafts.firstOrNull();val firstPattern=patternDrafts.firstOrNull();val firstExample=firstPattern?.examples?.firstOrNull();onSave((note?:GrammarNote(title=title)).copy(course=course.trim().ifBlank{"通用"},title=title.trim(),category=category,level=level,summary=summary,structure=firstPattern?.formula.orEmpty(),usage=firstPattern?.usage.orEmpty(),exampleSentence=firstExample?.sentence.orEmpty(),exampleTranslation=firstExample?.translation.orEmpty(),commonMistakes=mistakes,comparison=comparison,tags=tags,sourceType=if(note==null&&aiApplied)"AI" else note?.sourceType?:"MANUAL",questionTemplate=q?.prompt.orEmpty(),answer=q?.answer.orEmpty(),acceptedAnswers=q?.acceptedAnswers.orEmpty(),options=q?.options.orEmpty(),explanation=q?.explanation.orEmpty()),drafts.toList(),patternDrafts.toList())},modifier=Modifier.weight(1f)){Text("儲存")}}}) { p ->
-        Column(Modifier.padding(p).verticalScroll(rememberScrollState()).padding(horizontal=16.dp,vertical=8.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
+        Column(Modifier.padding(p).pointerInput(editorSection){
+            detectHorizontalDragGestures(
+                onDragStart={ horizontalDrag=0f },
+                onHorizontalDrag={ _, amount -> horizontalDrag += amount },
+                onDragEnd={ if(abs(horizontalDrag)>100f) editorSection=(editorSection + if(horizontalDrag<0) 1 else -1).coerceIn(0,3) }
+            )
+        }.verticalScroll(rememberScrollState()).padding(horizontal=16.dp,vertical=8.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
             TabRow(selectedTabIndex=editorSection,containerColor=MaterialTheme.colorScheme.surface.copy(alpha=0.92f),divider={}){
                 listOf("基本","句型","題目","補充").forEachIndexed{index,label->Tab(selected=editorSection==index,onClick={editorSection=index},text={Text(label,maxLines=1)})}
             }
             when(editorSection){
                 0->{
-                    Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){OutlinedButton(enabled=!busy,onClick=::launchCamera,modifier=Modifier.weight(1f)){Icon(Icons.Default.CameraAlt,null);Spacer(Modifier.width(4.dp));Text("拍照")};OutlinedButton(enabled=!busy,onClick=::launchScanner,modifier=Modifier.weight(1f)){Icon(Icons.Default.DocumentScanner,null);Spacer(Modifier.width(4.dp));Text("掃描")};OutlinedButton(enabled=!busy,onClick={gallery.launch("image/*")},modifier=Modifier.weight(1f)){Icon(Icons.Default.PhotoLibrary,null);Spacer(Modifier.width(4.dp));Text("圖片")}}
+                    Row(horizontalArrangement=Arrangement.spacedBy(12.dp)){
+                        FilledTonalIconButton(enabled=!busy,onClick=::launchCamera){Icon(Icons.Default.CameraAlt,"拍照")}
+                        FilledTonalIconButton(enabled=!busy,onClick=::launchScanner){Icon(Icons.Default.DocumentScanner,"掃描")}
+                        FilledTonalIconButton(enabled=!busy,onClick={gallery.launch("image/*")}){Icon(Icons.Default.PhotoLibrary,"圖片")}
+                    }
                     if(busy)Card(colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.primaryContainer)){Row(Modifier.fillMaxWidth().padding(14.dp),verticalAlignment=Alignment.CenterVertically){CircularProgressIndicator(Modifier.size(22.dp));Spacer(Modifier.width(10.dp));Text("AI 正在辨識並整理文法…")}}
                     error?.let{Text(it,color=MaterialTheme.colorScheme.error)}
-                    ExposedDropdownMenuBox(expanded=courseMenu,onExpandedChange={courseMenu=it}){OutlinedTextField(value=course.ifBlank{"通用"},onValueChange={},readOnly=true,label={Text("課程（與單字區共用）")},trailingIcon={ExposedDropdownMenuDefaults.TrailingIcon(courseMenu)},singleLine=true,modifier=Modifier.menuAnchor().fillMaxWidth());ExposedDropdownMenu(expanded=courseMenu,onDismissRequest={courseMenu=false}){linkedCourses.forEach{linkedCourse->DropdownMenuItem(text={Text(linkedCourse,maxLines=1,overflow=TextOverflow.Ellipsis)},onClick={course=linkedCourse;courseMenu=false})}}}
+                    GrammarEditableMenu("課程",course.ifBlank{"通用"},linkedCourses,{course=it},{customField="課程"})
                     OutlinedTextField(title,{title=it},label={Text("文法類型名稱 *")},singleLine=true,modifier=Modifier.fillMaxWidth())
-                    Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){OutlinedTextField(category,{category=it},label={Text("分類")},singleLine=true,modifier=Modifier.weight(1f));OutlinedTextField(level,{level=it},label={Text("程度")},singleLine=true,modifier=Modifier.weight(1f))}
+                    Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                        GrammarEditableMenu("分類",category,categoryOptions,{category=it},{customField="分類"},Modifier.weight(1f))
+                        GrammarEditableMenu("程度",level,levelOptions,{level=it},{customField="程度"},Modifier.weight(1f))
+                    }
                     OutlinedTextField(summary,{summary=it},label={Text("核心概念")},minLines=3,modifier=Modifier.fillMaxWidth())
                     OutlinedTextField(tags,{tags=it},label={Text("標籤（逗號分隔）")},singleLine=true,modifier=Modifier.fillMaxWidth())
                 }
@@ -721,6 +806,8 @@ fun GrammarWritingCheckScreen(
     var originalText by rememberSaveable { mutableStateOf("") }
     var issues by remember { mutableStateOf<List<GrammarWritingIssue>>(emptyList()) }
     val accepted = remember { mutableStateListOf<String>() }
+    val ignored = remember { mutableStateListOf<String>() }
+    var showRevised by rememberSaveable { mutableStateOf(false) }
     var busyLabel by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var uncertainParts by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -825,21 +912,41 @@ fun GrammarWritingCheckScreen(
             if (issues.isEmpty() && busyLabel == null && text.isNotBlank()) item {
                 Text("檢查結果會以逐句對照顯示；只有你確認的項目才會建立弱點練習。", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            items(issues, key = { "${it.ruleKey}|${it.originalSentence}" }) { issue ->
+            if (issues.isNotEmpty()) item {
+                val grammarCount = issues.count { it.ruleKey.contains("grammar", true) || it.title.contains("文法") || it.title.contains("時態") }
+                Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f))) {
+                    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("檢查完成", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("共 ${issues.size} 項建議 · 文法 ${grammarCount} · 其他 ${issues.size - grammarCount}")
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilterChip(selected = !showRevised, onClick = { showRevised = false }, label = { Text("原文") })
+                            FilterChip(selected = showRevised, onClick = { showRevised = true }, label = { Text("目前修正版") })
+                        }
+                        if (showRevised) Text(text, style = MaterialTheme.typography.bodyMedium)
+                        Text("AI 建議仍應由你確認；只有按下套用的內容會修改文字並建立弱點。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+            items(issues.filter { "${it.ruleKey}|${it.originalSentence}" !in ignored }, key = { "${it.ruleKey}|${it.originalSentence}" }) { issue ->
                 val key = "${issue.ruleKey}|${issue.originalSentence}"
                 Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(issue.title, fontWeight = FontWeight.Bold)
+                        AssistChip(onClick = {}, label = { Text(issue.title) })
+                        Text("原文", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text(issue.originalSentence, color = MaterialTheme.colorScheme.error)
+                        Text("建議", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text(issue.correctedSentence, color = MaterialTheme.colorScheme.primary)
                         Text(issue.explanation)
-                        Button(
-                            enabled = key !in accepted,
-                            onClick = {
-                                text = text.replaceFirst(issue.originalSentence, issue.correctedSentence)
-                                accepted.add(key); onAccept(issue)
-                            }, modifier = Modifier.fillMaxWidth()
-                        ) { Text(if (key in accepted) "已建立弱點練習" else "套用並建立弱點練習") }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(onClick = { ignored.add(key) }, modifier = Modifier.weight(1f)) { Text("略過") }
+                            Button(
+                                enabled = key !in accepted,
+                                onClick = {
+                                    text = text.replaceFirst(issue.originalSentence, issue.correctedSentence)
+                                    accepted.add(key); onAccept(issue)
+                                }, modifier = Modifier.weight(1f)
+                            ) { Text(if (key in accepted) "已套用" else "套用並練習") }
+                        }
                     }
                 }
             }

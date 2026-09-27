@@ -20,10 +20,31 @@ object GoogleTranslateLookupService {
         .build()
 
     suspend fun lookup(rawWord: String): DictionaryEntry = withContext(Dispatchers.IO) {
-        val word = rawWord.trim().lowercase()
-        require(word.matches(Regex("[a-z][a-z' -]{0,79}"))) { "請輸入英文單字或短語" }
-        val root = request(word, includeDictionary = true)
-        parse(word, root)
+        val word = rawWord.trim()
+        val chineseQuery = word.any { it.code in 0x3400..0x9FFF }
+        require(
+            if (chineseQuery) word.length <= 80
+            else word.lowercase().matches(Regex("[a-z][a-z' -]{0,79}"))
+        ) { "請輸入英文單字、英文短語或中文解釋" }
+        val root = request(word, includeDictionary = !chineseQuery, chineseToEnglish = chineseQuery)
+        if (chineseQuery) parseChineseQuery(word, root) else parse(word.lowercase(), root)
+    }
+
+    private fun parseChineseQuery(requestedText: String, root: JSONArray): DictionaryEntry {
+        val rows = root.optJSONArray(0) ?: error("Google 翻譯沒有回傳翻譯結果")
+        val english = buildString {
+            for (index in 0 until rows.length()) append(rows.optJSONArray(index)?.optString(0).orEmpty())
+        }.trim()
+        check(english.isNotBlank()) { "找不到對應的英文" }
+        return DictionaryEntry(
+            word = english,
+            phonetic = "",
+            partOfSpeech = "",
+            definition = requestedText,
+            exampleSentence = "",
+            exampleTranslation = "",
+            category = "Google 中英翻譯"
+        )
     }
 
     internal fun parse(requestedWord: String, root: JSONArray): DictionaryEntry {
@@ -59,7 +80,7 @@ object GoogleTranslateLookupService {
 
     suspend fun translateExample(entry: DictionaryEntry): DictionaryEntry = withContext(Dispatchers.IO) {
         if (entry.exampleSentence.isBlank()) return@withContext entry
-        val root = request(entry.exampleSentence, includeDictionary = false)
+        val root = request(entry.exampleSentence, includeDictionary = false, chineseToEnglish = false)
         val rows = root.optJSONArray(0)
         val translation = buildString {
             if (rows != null) for (index in 0 until rows.length()) {
@@ -69,11 +90,11 @@ object GoogleTranslateLookupService {
         entry.copy(exampleTranslation = translation)
     }
 
-    private fun request(text: String, includeDictionary: Boolean): JSONArray {
+    private fun request(text: String, includeDictionary: Boolean, chineseToEnglish: Boolean = false): JSONArray {
         val url = "https://translate.googleapis.com/translate_a/single".toHttpUrl().newBuilder()
             .addQueryParameter("client", "gtx")
-            .addQueryParameter("sl", "en")
-            .addQueryParameter("tl", "zh-TW")
+            .addQueryParameter("sl", if (chineseToEnglish) "zh-TW" else "en")
+            .addQueryParameter("tl", if (chineseToEnglish) "en" else "zh-TW")
             .addQueryParameter("dt", "t")
             .addQueryParameter("dt", "rm")
             .apply {

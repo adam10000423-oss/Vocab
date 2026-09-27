@@ -72,6 +72,7 @@ import com.example.data.dictionary.DictionaryEntry
 import com.example.data.entity.Deck
 import com.example.data.entity.Flashcard
 import com.example.ui.components.CalmEmptyState
+import com.example.ui.components.ImportDestinationSelector
 import com.example.ui.components.rememberResponsiveLayout
 import com.example.util.OcrWordParser
 import kotlinx.coroutines.flow.debounce
@@ -104,6 +105,7 @@ class EditableCardState(
 @Composable
 fun AddEditCardScreen(
     editingCard: Flashcard?,
+    initialFocusCardId: Long? = null,
     initialSharedText: String? = null,
     allCards: List<Flashcard>,
     decks: List<Deck>,
@@ -367,6 +369,15 @@ fun AddEditCardScreen(
     val listState = rememberLazyListState()
     var requestedFocusCard by remember { mutableStateOf<EditableCardState?>(null) }
 
+    LaunchedEffect(isInitialized, initialFocusCardId, selectedDeckId) {
+        if (!isInitialized || initialFocusCardId == null) return@LaunchedEffect
+        val index = editableCards.indexOfFirst { it.originalId == initialFocusCardId }
+        if (index >= 0) {
+            requestedFocusCard = editableCards[index]
+            listState.animateScrollToItem(index * 2 + 2)
+        }
+    }
+
     fun insertCardAt(index: Int) {
         val newCard = EditableCardState(initialPos = "")
         editableCards.add(index.coerceIn(0, editableCards.size), newCard)
@@ -509,64 +520,20 @@ fun AddEditCardScreen(
                                 )
                             }
 
-                            TextButton(onClick = { showAddFolderDialog = true }) {
-                                Text("新增資料夾", fontSize = 12.sp)
-                            }
                         }
 
-                        // Course Selection Chips
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            items(courses, key = { it }) { course ->
-                                val isSelected = selectedCourse == course
-                                Surface(
-                                    onClick = {
-                                        selectedCourse = course
-                                        val firstFolder = decks.firstOrNull { it.category == course }
-                                        if (firstFolder != null) {
-                                            saveThenSwitchDeck(firstFolder.id)
-                                        }
-                                    },
-                                    shape = RoundedCornerShape(10.dp),
-                                    color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
-                                    contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
-                                ) {
-                                    Text(
-                                        text = course,
-                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                                    )
-                                }
-                            }
-                        }
-
-                        // Folder Chips
-                        if (availableFoldersInCourse.isNotEmpty()) {
-                            LazyRow(
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                items(availableFoldersInCourse, key = { it.id }) { folder ->
-                                    val isSelected = selectedDeckId == folder.id
-                                    Surface(
-                                        onClick = { saveThenSwitchDeck(folder.id) },
-                                        shape = RoundedCornerShape(10.dp),
-                                        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
-                                        contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text(
-                                                text = folder.name,
-                                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
-                                            )
-                                        }
-                                    }
-                                }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            ImportDestinationSelector(
+                                decks = decks,
+                                selectedDeckId = selectedDeckId,
+                                onDeckSelected = { deckId ->
+                                    decks.firstOrNull { it.id == deckId }?.let { selectedCourse = it.category }
+                                    if (deckId != selectedDeckId) saveThenSwitchDeck(deckId)
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(onClick = { showAddFolderDialog = true }) {
+                                Icon(Icons.Default.Add, contentDescription = "新增資料夾")
                             }
                         }
                     }

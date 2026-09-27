@@ -98,6 +98,8 @@ fun CardListScreen(
     cards: List<Flashcard>,
     decks: List<Deck> = emptyList(),
     selectedDeckId: Long? = null,
+    revealCardId: Long? = null,
+    onRevealHandled: () -> Unit = {},
     onSelectDeck: (Long?) -> Unit = {},
     onToggleFavorite: (Flashcard) -> Unit,
     onDeleteCard: (Flashcard) -> Unit,
@@ -210,6 +212,25 @@ fun CardListScreen(
                 }
                 cardOrderChanged = true
             }
+        }
+    }
+
+    var highlightedCardId by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(revealCardId, displayedCards) {
+        val targetId = revealCardId ?: return@LaunchedEffect
+        // A reveal request must not remain hidden behind the previous search/tab filter.
+        if (selectedTab != 0 || searchQuery.isNotEmpty()) {
+            selectedTab = 0
+            searchQuery = ""
+            return@LaunchedEffect
+        }
+        val index = displayedCards.indexOfFirst { it.id == targetId }
+        if (index >= 0) {
+            cardListState.animateScrollToItem(index)
+            highlightedCardId = targetId
+            onRevealHandled()
+            kotlinx.coroutines.delay(1_600)
+            highlightedCardId = null
         }
     }
 
@@ -730,6 +751,7 @@ fun CardListScreen(
                                 onSpeak = { onSpeak(card.word) },
                                 onPracticePronunciation = {},
                                 showReorder = dragReorderEnabled,
+                                highlighted = highlightedCardId == card.id,
                                 dragHandleModifier = Modifier.draggableHandle()
                             )
                         }
@@ -755,12 +777,13 @@ private fun CardListItem(
     onSpeak: () -> Unit,
     onPracticePronunciation: () -> Unit,
     showReorder: Boolean,
+    highlighted: Boolean = false,
     dragHandleModifier: Modifier = Modifier
 ) {
     Card(
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+            containerColor = if (isSelected || highlighted) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f)
             else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
         ),
         modifier = Modifier

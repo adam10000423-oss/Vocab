@@ -8,6 +8,8 @@ import com.example.data.VocabularyRepository
 import com.example.data.dictionary.DictionaryEngine
 import com.example.data.dictionary.DictionaryEntry
 import com.example.data.dictionary.GoogleTranslateLookupService
+import com.example.data.dictionary.FreeDictionaryLookupService
+import com.example.data.dictionary.MyMemoryTranslateLookupService
 import com.example.data.entity.Deck
 import com.example.data.entity.Flashcard
 import com.example.data.entity.StudyLog
@@ -1263,6 +1265,10 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
+    fun updateDictionarySource(source: String) {
+        viewModelScope.launch { settingsRepository.setDictionarySource(source) }
+    }
+
     fun updateReminderTime(hour: Int, minute: Int) {
         viewModelScope.launch {
             settingsRepository.setReminderTime(hour, minute)
@@ -1663,8 +1669,28 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
-    suspend fun lookupGoogleTranslate(word: String): Result<DictionaryEntry> = runCatching {
-        GoogleTranslateLookupService.lookup(word).let { GoogleTranslateLookupService.translateExample(it) }
+    suspend fun lookupDictionary(word: String): Result<DictionaryEntry> = runCatching {
+        val chineseQuery = word.any { it.code in 0x3400..0x9FFF }
+        when {
+            chineseQuery && settings.value.dictionarySource == "GOOGLE" -> GoogleTranslateLookupService.lookup(word)
+            chineseQuery -> runCatching { GoogleTranslateLookupService.lookup(word) }
+                .getOrElse { googleError ->
+                    runCatching { MyMemoryTranslateLookupService.lookupChinese(word) }
+                        .getOrElse { backupError -> error("Google：${googleError.message}\n備用翻譯：${backupError.message}") }
+                }
+            settings.value.dictionarySource == "GOOGLE" -> GoogleTranslateLookupService.lookup(word).let { GoogleTranslateLookupService.translateExample(it) }
+            settings.value.dictionarySource == "FREE" -> FreeDictionaryLookupService.lookup(word)
+            else -> runCatching {
+                GoogleTranslateLookupService.lookup(word).let { GoogleTranslateLookupService.translateExample(it) }
+            }.getOrElse { googleError ->
+                runCatching { FreeDictionaryLookupService.lookup(word) }
+                    .getOrElse { freeError -> runCatching { MyMemoryTranslateLookupService.lookupEnglish(word) }
+                        .getOrElse { translateError ->
+                            error("Google：${googleError.message}\n備用字典：${freeError.message}\n備用翻譯：${translateError.message}")
+                        }
+                    }
+            }
+        }
     }
 
     fun addDictionaryEntryToDeck(entry: DictionaryEntry, deckId: Long, onComplete: (Boolean) -> Unit = {}) {
@@ -1776,6 +1802,28 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
             voiceName = value.ttsVoiceName,
             voiceStyle = value.ttsVoiceStyle,
             repetitions = value.ttsGroupRepetitions,
+            onComplete = onComplete
+        )
+    }
+
+    fun speakLearningCardFront(card: Flashcard, onComplete: () -> Unit = {}) {
+        val value = settings.value
+        val segments = buildList {
+            if (value.ttsFrontReadWord) add(SpeechSegment(card.word, "en-US"))
+            if (value.ttsFrontSpellWord) {
+                val spelling = card.word.filter(Char::isLetter).uppercase().toCharArray().joinToString(", ")
+                if (spelling.isNotBlank()) add(SpeechSegment(spelling, "en-US"))
+            }
+            if (value.ttsFrontReadPartOfSpeech && card.partOfSpeech.isNotBlank()) {
+                add(SpeechSegment(expandPartOfSpeechForSpeech(card.partOfSpeech), "en-US"))
+            }
+        }
+        ttsManager.speakSequence(
+            segments = segments,
+            rate = value.speechRate,
+            voiceName = value.ttsVoiceName,
+            voiceStyle = value.ttsVoiceStyle,
+            repetitions = value.ttsFrontRepetitions,
             onComplete = onComplete
         )
     }
@@ -1932,8 +1980,12 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
 
     fun openAssistant(contextDeckId: Long?) {
         assistantContextDeckId = contextDeckId
-        _assistantSelectedDeckIds.value = contextDeckId?.let(::setOf)
-            ?: allDecks.value.map { it.id }.toSet()
+        val availableIds = allDecks.value.mapTo(linkedSetOf()) { it.id }
+        _assistantSelectedDeckIds.value = contextDeckId?.let(::setOf) ?: when {
+            settings.value.assistantScopeMode == "ALL" -> availableIds
+            else -> settings.value.assistantScopeDeckIds.filterTo(linkedSetOf()) { it in availableIds }
+                .ifEmpty { availableIds }
+        }
         val currentId = _assistantCurrentConversationId.value
         if (currentId == null || _assistantConversations.value.none { it.id == currentId }) {
             val existing = _assistantConversations.value.maxByOrNull { it.updatedAt }
@@ -1948,6 +2000,12 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
         val availableIds = allDecks.value.mapTo(hashSetOf()) { it.id }
         _assistantSelectedDeckIds.value = deckIds.filterTo(linkedSetOf()) { it in availableIds }
         assistantContextDeckId = _assistantSelectedDeckIds.value.singleOrNull()
+        viewModelScope.launch {
+            settingsRepository.setAssistantScope(
+                allSelected = availableIds.isNotEmpty() && _assistantSelectedDeckIds.value == availableIds,
+                deckIds = _assistantSelectedDeckIds.value
+            )
+        }
     }
 
     fun newAssistantConversation(incognito: Boolean) {
