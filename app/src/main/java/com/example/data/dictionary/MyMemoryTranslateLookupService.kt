@@ -26,7 +26,7 @@ object MyMemoryTranslateLookupService {
             .addQueryParameter("q", text)
             .addQueryParameter("langpair", languagePair)
             .build()
-        val request = Request.Builder().url(url).header("User-Agent", "Vocab/2.7.1 Android").build()
+        val request = Request.Builder().url(url).header("User-Agent", "Vocab/2.8.0 Android").build()
         client.newCall(request).execute().use { response ->
             check(response.isSuccessful) { "備用翻譯暫時無法查詢（${response.code}）" }
             val root = JSONObject(response.body?.string().orEmpty())

@@ -38,6 +38,7 @@ import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
 import kotlinx.coroutines.launch
 import java.io.File
+import org.json.JSONArray
 import kotlin.math.abs
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
@@ -182,21 +183,21 @@ fun GrammarNotesScreen(
     val now = System.currentTimeMillis()
     var searchQuery by rememberSaveable { mutableStateOf("") }
     val courses = remember(notes) { notes.map { it.course }.filter { it.isNotBlank() }.distinct() }
-    val grammarTypes = remember(notes) { notes.map { it.title }.filter { it.isNotBlank() }.distinct() }
     var selectedCourse by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedType by rememberSaveable { mutableStateOf<String?>(null) }
+    val folders = remember(notes, selectedCourse) { notes.filter { selectedCourse == null || it.course == selectedCourse }.map { it.folder }.filter { it.isNotBlank() }.distinct() }
     var courseMenu by remember { mutableStateOf(false) }
     var typeMenu by remember { mutableStateOf(false) }
 
     val filteredNotes = remember(notes, searchQuery, selectedCourse, selectedType) {
         notes.filter { note ->
             val matchCourse = selectedCourse == null || note.course.equals(selectedCourse, ignoreCase = true)
-            val matchType = selectedType == null || note.title.equals(selectedType, ignoreCase = true)
+            val matchType = selectedType == null || note.folder.equals(selectedType, ignoreCase = true)
             val matchQuery = searchQuery.isBlank() ||
                 note.title.contains(searchQuery, ignoreCase = true) ||
                 note.summary.contains(searchQuery, ignoreCase = true) ||
                 note.structure.contains(searchQuery, ignoreCase = true) ||
-                note.course.contains(searchQuery, ignoreCase = true)
+                note.course.contains(searchQuery, ignoreCase = true) || note.folder.contains(searchQuery, ignoreCase = true)
             matchCourse && matchType && matchQuery
         }
     }
@@ -271,13 +272,13 @@ fun GrammarNotesScreen(
                 }
                 ExposedDropdownMenuBox(expanded = typeMenu, onExpandedChange = { typeMenu = it }, modifier = Modifier.weight(1f)) {
                     OutlinedTextField(
-                        value = selectedType ?: "全部類型", onValueChange = {}, readOnly = true,
-                        label = { Text("文法類型") }, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(typeMenu) },
+                        value = selectedType ?: "全部資料夾", onValueChange = {}, readOnly = true,
+                        label = { Text("資料夾") }, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(typeMenu) },
                         singleLine = true, modifier = Modifier.menuAnchor().fillMaxWidth()
                     )
                     ExposedDropdownMenu(expanded = typeMenu, onDismissRequest = { typeMenu = false }) {
-                        DropdownMenuItem(text = { Text("全部類型") }, onClick = { selectedType = null; typeMenu = false })
-                        grammarTypes.forEach { type -> DropdownMenuItem(text = { Text(type, maxLines = 1, overflow = TextOverflow.Ellipsis) }, onClick = { selectedType = type; typeMenu = false }) }
+                        DropdownMenuItem(text = { Text("全部資料夾") }, onClick = { selectedType = null; typeMenu = false })
+                        folders.forEach { type -> DropdownMenuItem(text = { Text(type, maxLines = 1, overflow = TextOverflow.Ellipsis) }, onClick = { selectedType = type; typeMenu = false }) }
                     }
                 }
             }
@@ -329,13 +330,13 @@ fun GrammarStudyHubScreen(
 ) {
     val now = System.currentTimeMillis()
     val courses = remember(notes) { notes.map { it.course }.filter(String::isNotBlank).distinct() }
-    val grammarTypes = remember(notes) { notes.map { it.title }.filter(String::isNotBlank).distinct() }
     var selectedCourse by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedType by rememberSaveable { mutableStateOf<String?>(null) }
+    val grammarTypes = remember(notes, selectedCourse) { notes.filter { selectedCourse == null || it.course == selectedCourse }.map { it.folder }.filter(String::isNotBlank).distinct() }
     var courseMenu by remember { mutableStateOf(false) }
     var typeMenu by remember { mutableStateOf(false) }
     val filtered = remember(notes, selectedCourse, selectedType) { notes.filter {
-        (selectedCourse == null || it.course == selectedCourse) && (selectedType == null || it.title == selectedType)
+        (selectedCourse == null || it.course == selectedCourse) && (selectedType == null || it.folder == selectedType)
     } }
     val due = filtered.filter { it.nextReviewAt <= now }
     val nextNote = due.firstOrNull() ?: filtered.firstOrNull()
@@ -348,7 +349,7 @@ fun GrammarStudyHubScreen(
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 GrammarFilterMenu("課程", selectedCourse ?: "全部課程", courses, courseMenu, { courseMenu = it }, { selectedCourse = it }, Modifier.weight(1f))
-                GrammarFilterMenu("文法類型", selectedType ?: "全部類型", grammarTypes, typeMenu, { typeMenu = it }, { selectedType = it }, Modifier.weight(1f))
+                GrammarFilterMenu("資料夾", selectedType ?: "全部資料夾", grammarTypes, typeMenu, { typeMenu = it }, { selectedType = it }, Modifier.weight(1f))
             }
         }
         item {
@@ -447,7 +448,7 @@ private fun GrammarNoteCardBody(note: GrammarNote, now: Long) {
         Text(if (note.nextReviewAt <= now) "待複習" else "${note.masteryPercent}%", color = MaterialTheme.colorScheme.primary)
     }
     LinearProgressIndicator(progress = { note.masteryPercent / 100f }, modifier = Modifier.fillMaxWidth())
-    AssistChip(onClick = {}, label = { Text(note.course, maxLines = 1) })
+    AssistChip(onClick = {}, label = { Text("${note.course} · ${note.folder}", maxLines = 1, overflow = TextOverflow.Ellipsis) })
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -514,14 +515,17 @@ private fun GrammarEditableMenu(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun GrammarEditorScreen(note: GrammarNote?, questions: List<GrammarQuestion>, patterns: List<GrammarPattern>, examples: List<GrammarExample>, courses: List<String>, categories: List<String> = emptyList(), levels: List<String> = emptyList(), initialShowAiDialog: Boolean = false, onGenerateAi: suspend (String) -> GrammarDraft, onScanImages: suspend (List<Uri>) -> GrammarDraft, onSave: (GrammarNote, List<GrammarQuestionDraft>, List<GrammarPatternDraft>) -> Unit, onBack: () -> Unit) {
+fun GrammarEditorScreen(note: GrammarNote?, initialDraft: GrammarDraft? = null, questions: List<GrammarQuestion>, patterns: List<GrammarPattern>, examples: List<GrammarExample>, courses: List<String>, folders: List<String> = emptyList(), categories: List<String> = emptyList(), levels: List<String> = emptyList(), initialShowAiDialog: Boolean = false, onGenerateAi: suspend (String) -> GrammarDraft, onScanImages: suspend (List<Uri>) -> GrammarDraft, onSave: (GrammarNote, List<GrammarQuestionDraft>, List<GrammarPatternDraft>) -> Unit, onBack: () -> Unit) {
     val context = LocalContext.current; val scope = rememberCoroutineScope()
-    var course by rememberSaveable(note?.id) { mutableStateOf(note?.course ?: courses.firstOrNull().orEmpty()) }; var title by rememberSaveable(note?.id) { mutableStateOf(note?.title.orEmpty()) }
+    var course by rememberSaveable(note?.id) { mutableStateOf(note?.course ?: courses.firstOrNull().orEmpty()) }
+    var folder by rememberSaveable(note?.id) { mutableStateOf(note?.folder ?: "未分類") }
+    var title by rememberSaveable(note?.id) { mutableStateOf(note?.title ?: initialDraft?.title.orEmpty()) }
     val linkedCourses = remember(courses) { (listOf("通用") + courses).filter(String::isNotBlank).distinct() }
-    var summary by rememberSaveable(note?.id) { mutableStateOf(note?.summary.orEmpty()) }; var structure by rememberSaveable(note?.id) { mutableStateOf(note?.structure.orEmpty()) }; var usage by rememberSaveable(note?.id) { mutableStateOf(note?.usage.orEmpty()) }
-    var example by rememberSaveable(note?.id) { mutableStateOf(note?.exampleSentence.orEmpty()) }; var translation by rememberSaveable(note?.id) { mutableStateOf(note?.exampleTranslation.orEmpty()) }; var mistakes by rememberSaveable(note?.id) { mutableStateOf(note?.commonMistakes.orEmpty()) }; var comparison by rememberSaveable(note?.id) { mutableStateOf(note?.comparison.orEmpty()) }; var tags by rememberSaveable(note?.id) { mutableStateOf(note?.tags.orEmpty()) }
-    var category by rememberSaveable(note?.id) { mutableStateOf(note?.category ?: "其他") }
-    var level by rememberSaveable(note?.id) { mutableStateOf(note?.level ?: "未分級") }
+    val linkedFolders = remember(folders, course, note?.folder) { (listOf("未分類") + folders + note?.folder.orEmpty()).filter(String::isNotBlank).distinct() }
+    var summary by rememberSaveable(note?.id) { mutableStateOf(note?.summary ?: initialDraft?.summary.orEmpty()) }; var structure by rememberSaveable(note?.id) { mutableStateOf(note?.structure ?: initialDraft?.structure.orEmpty()) }; var usage by rememberSaveable(note?.id) { mutableStateOf(note?.usage ?: initialDraft?.usage.orEmpty()) }
+    var example by rememberSaveable(note?.id) { mutableStateOf(note?.exampleSentence ?: initialDraft?.exampleSentence.orEmpty()) }; var translation by rememberSaveable(note?.id) { mutableStateOf(note?.exampleTranslation ?: initialDraft?.exampleTranslation.orEmpty()) }; var mistakes by rememberSaveable(note?.id) { mutableStateOf(note?.commonMistakes ?: initialDraft?.commonMistakes.orEmpty()) }; var comparison by rememberSaveable(note?.id) { mutableStateOf(note?.comparison ?: initialDraft?.comparison.orEmpty()) }; var tags by rememberSaveable(note?.id) { mutableStateOf(note?.tags ?: initialDraft?.tags.orEmpty()) }
+    var category by rememberSaveable(note?.id) { mutableStateOf(note?.category ?: initialDraft?.category ?: "其他") }
+    var level by rememberSaveable(note?.id) { mutableStateOf(note?.level ?: initialDraft?.level ?: "未分級") }
     val categoryOptions = remember(categories, note?.category) { (listOf("時態", "句型", "介系詞", "連接詞", "語態", "比較", "其他") + categories + note?.category.orEmpty()).filter(String::isNotBlank).distinct() }
     val levelOptions = remember(levels, note?.level) { (listOf("初級", "中級", "中高級", "高級", "未分級") + levels + note?.level.orEmpty()).filter(String::isNotBlank).distinct() }
     var customField by remember { mutableStateOf<String?>(null) }
@@ -532,6 +536,7 @@ fun GrammarEditorScreen(note: GrammarNote?, questions: List<GrammarQuestion>, pa
             usage = pattern.usage, notes = pattern.notes,
             examples = examples.filter { it.grammarPatternId == pattern.id }.map { GrammarExampleDraft(it.sentence, it.translation, it.highlightedText) }
         ) })
+        if (isEmpty()) addAll(initialDraft?.patterns.orEmpty())
         if (isEmpty() && (note?.structure?.isNotBlank() == true || note?.exampleSentence?.isNotBlank() == true)) add(
             GrammarPatternDraft(title = "主要句型", formula = note.structure, meaning = note.summary, usage = note.usage,
                 examples = if (note.exampleSentence.isBlank()) emptyList() else listOf(GrammarExampleDraft(note.exampleSentence, note.exampleTranslation)))
@@ -541,7 +546,7 @@ fun GrammarEditorScreen(note: GrammarNote?, questions: List<GrammarQuestion>, pa
         id = q.id, grammarPatternIndex = patterns.indexOfFirst { it.id == q.grammarPatternId }, type = q.type,
         prompt = q.prompt, translation = q.translation, answer = q.answer, acceptedAnswers = q.acceptedAnswers,
         options = q.options, explanation = q.explanation, difficulty = q.difficulty, sourceType = q.sourceType
-    ) }); if (isEmpty() && note?.questionTemplate?.isNotBlank() == true) add(GrammarQuestionDraft(prompt = note.questionTemplate, translation = note.exampleTranslation, answer = note.answer, acceptedAnswers = note.acceptedAnswers, options = note.options, explanation = note.explanation)) } }
+    ) }); if (isEmpty()) addAll(initialDraft?.questions.orEmpty()); if (isEmpty() && note?.questionTemplate?.isNotBlank() == true) add(GrammarQuestionDraft(prompt = note.questionTemplate, translation = note.exampleTranslation, answer = note.answer, acceptedAnswers = note.acceptedAnswers, options = note.options, explanation = note.explanation)) } }
     var aiPrompt by rememberSaveable { mutableStateOf("") }; var showAiDialog by remember { mutableStateOf(initialShowAiDialog) }; var busy by remember { mutableStateOf(false) }; var aiApplied by rememberSaveable(note?.id) { mutableStateOf(false) }; var error by remember { mutableStateOf<String?>(null) }; var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
     var editorSection by rememberSaveable(note?.id) { mutableIntStateOf(0) }
     var horizontalDrag by remember { mutableFloatStateOf(0f) }
@@ -574,14 +579,14 @@ fun GrammarEditorScreen(note: GrammarNote?, questions: List<GrammarQuestion>, pa
         title = { Text("新增${customField}") },
         text = { OutlinedTextField(customValue, { customValue = it }, singleLine = true, label = { Text(customField.orEmpty()) }) },
         confirmButton = { Button(enabled = customValue.isNotBlank(), onClick = {
-            when (customField) { "課程" -> course = customValue.trim(); "分類" -> category = customValue.trim(); "程度" -> level = customValue.trim() }
+            when (customField) { "課程" -> course = customValue.trim(); "資料夾" -> folder = customValue.trim(); "分類" -> category = customValue.trim(); "程度" -> level = customValue.trim() }
             customValue = ""; customField = null
         }) { Text("套用") } },
         dismissButton = { TextButton(onClick = { customField = null }) { Text("取消") } }
     )
     if (showAiDialog) AlertDialog(onDismissRequest={if(!busy)showAiDialog=false},title={Text("AI 建立或補齊文法")},text={Column(verticalArrangement=Arrangement.spacedBy(10.dp)){Text("輸入主題可建立完整內容；已有內容時也能只補齊空白欄位。");OutlinedTextField(aiPrompt,{aiPrompt=it},label={Text("文法主題與程度")},minLines=3);error?.let{Text(it,color=MaterialTheme.colorScheme.error)}}},confirmButton={Column(horizontalAlignment=Alignment.End){Button(enabled=aiPrompt.isNotBlank()&&!busy,onClick={scope.launch{busy=true;error=null;runCatching{onGenerateAi(aiPrompt)}.onSuccess{applyDraft(it,false);showAiDialog=false}.onFailure{error=it.message?:"AI 產生失敗"};busy=false}}){Text(if(busy)"處理中…" else "依主題生成")};TextButton(enabled=aiPrompt.isNotBlank()&&!busy,onClick={scope.launch{busy=true;error=null;runCatching{onGenerateAi(aiPrompt)}.onSuccess{applyDraft(it,true);showAiDialog=false}.onFailure{error=it.message?:"AI 補齊失敗"};busy=false}}){Text("只補齊空白")}}},dismissButton={TextButton(enabled=!busy,onClick={showAiDialog=false}){Text("取消")}})
-    Scaffold(topBar={TopAppBar(title={Text(if(note==null)"新增文法" else "編輯文法")},navigationIcon={IconButton(onClick=onBack){Icon(Icons.AutoMirrored.Filled.ArrowBack,"返回")}},actions={IconButton(onClick={showAiDialog=true}){Icon(Icons.Default.AutoAwesome,"AI 建立")}})},bottomBar={Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(12.dp),horizontalArrangement=Arrangement.spacedBy(10.dp)){OutlinedButton(onClick=onBack,modifier=Modifier.weight(1f)){Text("取消")};Button(enabled=title.isNotBlank()&&!busy,onClick={val q=drafts.firstOrNull();val firstPattern=patternDrafts.firstOrNull();val firstExample=firstPattern?.examples?.firstOrNull();onSave((note?:GrammarNote(title=title)).copy(course=course.trim().ifBlank{"通用"},title=title.trim(),category=category,level=level,summary=summary,structure=firstPattern?.formula.orEmpty(),usage=firstPattern?.usage.orEmpty(),exampleSentence=firstExample?.sentence.orEmpty(),exampleTranslation=firstExample?.translation.orEmpty(),commonMistakes=mistakes,comparison=comparison,tags=tags,sourceType=if(note==null&&aiApplied)"AI" else note?.sourceType?:"MANUAL",questionTemplate=q?.prompt.orEmpty(),answer=q?.answer.orEmpty(),acceptedAnswers=q?.acceptedAnswers.orEmpty(),options=q?.options.orEmpty(),explanation=q?.explanation.orEmpty()),drafts.toList(),patternDrafts.toList())},modifier=Modifier.weight(1f)){Text("儲存")}}}) { p ->
-        Column(Modifier.padding(p).pointerInput(editorSection){
+    Scaffold(topBar={TopAppBar(title={Text(if(note==null)"新增文法" else "編輯文法")},navigationIcon={IconButton(onClick=onBack){Icon(Icons.AutoMirrored.Filled.ArrowBack,"返回")}},actions={IconButton(onClick={showAiDialog=true}){Icon(Icons.Default.AutoAwesome,"AI 建立")}})},bottomBar={Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(12.dp),horizontalArrangement=Arrangement.spacedBy(10.dp)){OutlinedButton(onClick=onBack,modifier=Modifier.weight(1f)){Text("取消")};Button(enabled=title.isNotBlank()&&!busy,onClick={val q=drafts.firstOrNull();val firstPattern=patternDrafts.firstOrNull();val firstExample=firstPattern?.examples?.firstOrNull();onSave((note?:GrammarNote(title=title)).copy(course=course.trim().ifBlank{"通用"},folder=folder.trim().ifBlank{"未分類"},title=title.trim(),category=category,level=level,summary=summary,structure=firstPattern?.formula.orEmpty(),usage=firstPattern?.usage.orEmpty(),exampleSentence=firstExample?.sentence.orEmpty(),exampleTranslation=firstExample?.translation.orEmpty(),commonMistakes=mistakes,comparison=comparison,tags=tags,sourceType=if(note==null&&(aiApplied||initialDraft!=null))"AI" else note?.sourceType?:"MANUAL",questionTemplate=q?.prompt.orEmpty(),answer=q?.answer.orEmpty(),acceptedAnswers=q?.acceptedAnswers.orEmpty(),options=q?.options.orEmpty(),explanation=q?.explanation.orEmpty()),drafts.toList(),patternDrafts.toList())},modifier=Modifier.weight(1f)){Text("儲存")}}}) { p ->
+        Column(Modifier.padding(p).fillMaxSize().pointerInput(editorSection){
             detectHorizontalDragGestures(
                 onDragStart={ horizontalDrag=0f },
                 onHorizontalDrag={ _, amount -> horizontalDrag += amount },
@@ -601,6 +606,7 @@ fun GrammarEditorScreen(note: GrammarNote?, questions: List<GrammarQuestion>, pa
                     if(busy)Card(colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.primaryContainer)){Row(Modifier.fillMaxWidth().padding(14.dp),verticalAlignment=Alignment.CenterVertically){CircularProgressIndicator(Modifier.size(22.dp));Spacer(Modifier.width(10.dp));Text("AI 正在辨識並整理文法…")}}
                     error?.let{Text(it,color=MaterialTheme.colorScheme.error)}
                     GrammarEditableMenu("課程",course.ifBlank{"通用"},linkedCourses,{course=it},{customField="課程"})
+                    GrammarEditableMenu("資料夾",folder.ifBlank{"未分類"},linkedFolders,{folder=it},{customField="資料夾"})
                     OutlinedTextField(title,{title=it},label={Text("文法類型名稱 *")},singleLine=true,modifier=Modifier.fillMaxWidth())
                     Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
                         GrammarEditableMenu("分類",category,categoryOptions,{category=it},{customField="分類"},Modifier.weight(1f))
@@ -788,14 +794,58 @@ fun GrammarLearnScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class) @Composable fun GrammarQuizScreen(note:GrammarNote,questions:List<GrammarQuestion>,onAnswer:(Boolean,Boolean)->Unit,onBack:()->Unit,onRetry:()->Unit){val initial=remember(note.id,questions){questions.sortedBy{it.sortOrder}};var queue by remember(note.id,questions){mutableStateOf(initial)};var index by rememberSaveable(note.id){mutableIntStateOf(0)};var selected by rememberSaveable(note.id){mutableStateOf("")};var input by rememberSaveable(note.id){mutableStateOf("")};var checked by rememberSaveable(note.id){mutableStateOf(false)};var correct by rememberSaveable(note.id){mutableStateOf(false)};var completed by rememberSaveable(note.id){mutableStateOf(false)};var round by rememberSaveable(note.id){mutableIntStateOf(1)};val wrong=remember(note.id){mutableStateListOf<GrammarQuestion>()};val q=queue.getOrNull(index);fun clear(){selected="";input="";checked=false;correct=false};fun restart(){queue=initial;index=0;wrong.clear();completed=false;round=1;clear();onRetry()};Scaffold(topBar={TopAppBar(title={Text(if(completed)"測驗完成" else "${note.title}測驗")},navigationIcon={IconButton(onClick=onBack){Icon(Icons.AutoMirrored.Filled.ArrowBack,"返回")}})}){p->Column(Modifier.padding(p).verticalScroll(rememberScrollState()).padding(20.dp),verticalArrangement=Arrangement.spacedBy(16.dp)){if(completed){Card(colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.primaryContainer),modifier=Modifier.fillMaxWidth()){Column(Modifier.padding(24.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(12.dp)){Icon(Icons.Default.CheckCircle,null,tint=MaterialTheme.colorScheme.primary);Text("測驗完成",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.Bold);Text("所有題目都已答對")}};Button(onClick=::restart,modifier=Modifier.fillMaxWidth()){Text("再次測驗")};OutlinedButton(onClick=onBack,modifier=Modifier.fillMaxWidth()){Text("返回文法")}}else if(q==null)Text("這篇文法還沒有練習題。")else{val choices=q.options.split(',','、','\n').map(String::trim).filter(String::isNotBlank).distinct().take(4);val response=if(choices.isNotEmpty())selected else input;val accepted=(q.acceptedAnswers.split(',','、')+q.answer).map{it.trim().lowercase()}.filter(String::isNotBlank).toSet();Text(if(round==1)"第 ${index+1}／${queue.size} 題" else "錯題練習 · 第 ${index+1}／${queue.size} 題",color=MaterialTheme.colorScheme.primary);LinearProgressIndicator(progress={(index+1f)/queue.size.coerceAtLeast(1)},modifier=Modifier.fillMaxWidth());Card(colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surfaceContainer),modifier=Modifier.fillMaxWidth()){Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){Text(q.prompt.replace("{{answer}}","____"),style=MaterialTheme.typography.titleLarge);if(q.translation.isNotBlank())Text(q.translation,color=MaterialTheme.colorScheme.onSurfaceVariant)}};if(choices.isNotEmpty())choices.forEach{c->FilterChip(selected=selected==c,enabled=!checked,onClick={selected=c},label={Text(c)},modifier=Modifier.fillMaxWidth())}else OutlinedTextField(input,{input=it},enabled=!checked,label={Text("輸入完整答案")},singleLine=true,modifier=Modifier.fillMaxWidth());if(checked)Card(colors=CardDefaults.cardColors(containerColor=if(correct)MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer)){Column(Modifier.fillMaxWidth().padding(16.dp)){Text(if(correct)"答對了" else "答錯了",fontWeight=FontWeight.Bold);if(!correct)Text("正確答案：${q.answer}");if(q.explanation.isNotBlank())Text(q.explanation)}};Button(enabled=response.isNotBlank(),onClick={if(!checked){correct=response.trim().lowercase() in accepted;checked=true;onAnswer(correct,false);if(!correct&&wrong.none{it.id==q.id})wrong.add(q)}else if(!correct)clear()else if(index<queue.lastIndex){index++;clear()}else if(wrong.isNotEmpty()){queue=wrong.toList();wrong.clear();index=0;round++;clear()}else completed=true},modifier=Modifier.fillMaxWidth()){Text(if(!checked)"確認答案" else if(!correct)"再答一次" else if(index==queue.lastIndex&&wrong.isEmpty())"完成" else "下一題")}}}}}
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun GrammarQuizScreen(note: GrammarNote, questions: List<GrammarQuestion>, onAnswer: (Boolean, Boolean) -> Unit, onBack: () -> Unit, onRetry: () -> Unit) {
+    val initial = remember(note.id, questions) { questions.sortedBy { it.sortOrder } }
+    var queue by remember(note.id, questions) { mutableStateOf(initial) }
+    var index by rememberSaveable(note.id) { mutableIntStateOf(0) }
+    var selected by rememberSaveable(note.id) { mutableStateOf("") }
+    var input by rememberSaveable(note.id) { mutableStateOf("") }
+    var checked by rememberSaveable(note.id) { mutableStateOf(false) }
+    var correct by rememberSaveable(note.id) { mutableStateOf(false) }
+    var completed by rememberSaveable(note.id) { mutableStateOf(false) }
+    var round by rememberSaveable(note.id) { mutableIntStateOf(1) }
+    var optionSeed by rememberSaveable(note.id) { mutableIntStateOf(kotlin.random.Random.nextInt()) }
+    val wrong = remember(note.id) { mutableStateListOf<GrammarQuestion>() }
+    val q = queue.getOrNull(index)
+    fun clear() { selected = ""; input = ""; checked = false; correct = false }
+    fun restart() { queue = initial; index = 0; wrong.clear(); completed = false; round = 1; optionSeed = kotlin.random.Random.nextInt(); clear(); onRetry() }
+
+    Scaffold(topBar = { TopAppBar(title = { Text(if (completed) "測驗完成" else "${note.title}測驗") }, navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } }) }) { padding ->
+        Column(Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            if (completed) {
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer), modifier = Modifier.fillMaxWidth()) { Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) { Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.primary); Text("測驗完成", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold); Text("所有題目都已答對") } }
+                Button(onClick = ::restart, modifier = Modifier.fillMaxWidth()) { Text("再次測驗") }
+                OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("返回文法") }
+            } else if (q == null) Text("這篇文法還沒有練習題。") else {
+                val rawChoices = q.options.split(',', '、', '\n').map(String::trim).filter(String::isNotBlank).distinct().take(4)
+                val choices = remember(q.id, optionSeed) { rawChoices.shuffled(kotlin.random.Random(optionSeed xor q.id.hashCode())) }
+                val response = if (choices.isNotEmpty()) selected else input
+                val accepted = (q.acceptedAnswers.split(',', '、') + q.answer).map { it.trim().lowercase() }.filter(String::isNotBlank).toSet()
+                Text(if (round == 1) "第 ${index + 1}／${queue.size} 題" else "錯題練習 · 第 ${index + 1}／${queue.size} 題", color = MaterialTheme.colorScheme.primary)
+                LinearProgressIndicator(progress = { (index + 1f) / queue.size.coerceAtLeast(1) }, modifier = Modifier.fillMaxWidth())
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer), modifier = Modifier.fillMaxWidth()) { Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) { Text(q.prompt.replace("{{answer}}", "____"), style = MaterialTheme.typography.headlineSmall); if (q.translation.isNotBlank()) Text(q.translation, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
+                if (choices.isNotEmpty()) choices.forEach { choice ->
+                    FilterChip(selected = selected == choice, enabled = !checked, onClick = { selected = choice }, label = { Text(choice, style = MaterialTheme.typography.titleMedium) }, modifier = Modifier.fillMaxWidth().heightIn(min = 58.dp))
+                } else OutlinedTextField(input, { input = it }, enabled = !checked, label = { Text("輸入完整答案") }, textStyle = MaterialTheme.typography.titleMedium, singleLine = true, modifier = Modifier.fillMaxWidth())
+                if (checked) Card(colors = CardDefaults.cardColors(containerColor = if (correct) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer)) { Column(Modifier.fillMaxWidth().padding(16.dp)) { Text(if (correct) "答對了" else "答錯了", fontWeight = FontWeight.Bold); if (!correct) Text("正確答案：${q.answer}"); if (q.explanation.isNotBlank()) Text(q.explanation) } }
+                Button(enabled = response.isNotBlank(), onClick = { if (!checked) { correct = response.trim().lowercase() in accepted; checked = true; onAnswer(correct, false); if (!correct && wrong.none { it.id == q.id }) wrong.add(q) } else if (!correct) clear() else if (index < queue.lastIndex) { index++; clear() } else if (wrong.isNotEmpty()) { queue = wrong.toList(); wrong.clear(); index = 0; round++; clear() } else completed = true }, modifier = Modifier.fillMaxWidth()) { Text(if (!checked) "確認答案" else if (!correct) "再答一次" else if (index == queue.lastIndex && wrong.isEmpty()) "完成" else "下一題") }
+            }
+        }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GrammarWritingCheckScreen(
     weaknesses: List<GrammarWeakness>,
+    records: List<GrammarWritingRecord> = emptyList(),
+    courses: List<String> = emptyList(),
     onCheck: suspend (String) -> List<GrammarWritingIssue>,
     onAccept: (GrammarWritingIssue) -> Unit,
+    onSaveRecord: (String, String, String, String, List<GrammarWritingIssue>) -> Unit = { _, _, _, _, _ -> },
+    onDeleteRecord: (GrammarWritingRecord) -> Unit = {},
     onRecognizeSources: (suspend (List<Uri>) -> GrammarWritingScanResult)? = null,
     onBack: () -> Unit = {},
     showTopBar: Boolean = true
@@ -812,6 +862,42 @@ fun GrammarWritingCheckScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var uncertainParts by remember { mutableStateOf<List<String>>(emptyList()) }
     var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
+    var showSaveDialog by remember { mutableStateOf(false) }
+    var recordTitle by rememberSaveable { mutableStateOf("") }
+    var recordCourse by rememberSaveable { mutableStateOf(courses.firstOrNull() ?: "通用") }
+    var courseMenu by remember { mutableStateOf(false) }
+    var selectedRecord by remember { mutableStateOf<GrammarWritingRecord?>(null) }
+
+    selectedRecord?.let { record ->
+        AlertDialog(
+            onDismissRequest = { selectedRecord = null },
+            title = { Text(record.title) },
+            text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                AssistChip(onClick = {}, label = { Text(record.course) })
+                Text("原始作文", fontWeight = FontWeight.Bold); Text(record.originalText)
+                HorizontalDivider(); Text("修改後作文", fontWeight = FontWeight.Bold); Text(record.revisedText)
+                val count = runCatching { JSONArray(record.issuesJson).length() }.getOrDefault(0)
+                Text("修改結果：$count 項", color = MaterialTheme.colorScheme.primary)
+            } },
+            confirmButton = { TextButton(onClick = { selectedRecord = null }) { Text("完成") } },
+            dismissButton = { TextButton(onClick = { onDeleteRecord(record); selectedRecord = null }) { Text("刪除", color = MaterialTheme.colorScheme.error) } }
+        )
+    }
+    if (showSaveDialog) AlertDialog(
+        onDismissRequest = { showSaveDialog = false },
+        title = { Text("儲存作文紀錄") },
+        text = { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            OutlinedTextField(recordTitle, { recordTitle = it }, label = { Text("作文標題") }, singleLine = true)
+            ExposedDropdownMenuBox(expanded = courseMenu, onExpandedChange = { courseMenu = it }) {
+                OutlinedTextField(recordCourse, {}, readOnly = true, label = { Text("課程") }, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(courseMenu) }, singleLine = true, modifier = Modifier.menuAnchor().fillMaxWidth())
+                ExposedDropdownMenu(expanded = courseMenu, onDismissRequest = { courseMenu = false }) {
+                    (listOf("通用") + courses).distinct().forEach { course -> DropdownMenuItem(text = { Text(course) }, onClick = { recordCourse = course; courseMenu = false }) }
+                }
+            }
+        } },
+        confirmButton = { Button(enabled = recordTitle.isNotBlank(), onClick = { onSaveRecord(recordTitle, recordCourse, originalText.ifBlank { text }, text, issues); showSaveDialog = false }) { Text("儲存") } },
+        dismissButton = { TextButton(onClick = { showSaveDialog = false }) { Text("取消") } }
+    )
 
     fun recognize(uris: List<Uri>) {
         val recognizer = onRecognizeSources ?: return
@@ -884,9 +970,6 @@ fun GrammarWritingCheckScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            item {
-                Text("輸入作文，或拍照／掃描後先校對辨識文字，再交給 AI 檢查。原文不會被直接覆蓋。", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
             if (onRecognizeSources != null) item {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilledTonalIconButton(onClick = ::takePhoto) { Icon(Icons.Default.CameraAlt, "拍照") }
@@ -909,9 +992,6 @@ fun GrammarWritingCheckScreen(
                 )
             }
             error?.let { item { Text(it, color = MaterialTheme.colorScheme.error) } }
-            if (issues.isEmpty() && busyLabel == null && text.isNotBlank()) item {
-                Text("檢查結果會以逐句對照顯示；只有你確認的項目才會建立弱點練習。", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
             if (issues.isNotEmpty()) item {
                 val grammarCount = issues.count { it.ruleKey.contains("grammar", true) || it.title.contains("文法") || it.title.contains("時態") }
                 Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f))) {
@@ -924,6 +1004,13 @@ fun GrammarWritingCheckScreen(
                         }
                         if (showRevised) Text(text, style = MaterialTheme.typography.bodyMedium)
                         Text("AI 建議仍應由你確認；只有按下套用的內容會修改文字並建立弱點。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Button(
+                            onClick = {
+                                if (recordTitle.isBlank()) recordTitle = "作文 ${records.size + 1}"
+                                showSaveDialog = true
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Icon(Icons.Default.Save, null); Spacer(Modifier.width(6.dp)); Text("儲存作文紀錄") }
                     }
                 }
             }
@@ -950,6 +1037,26 @@ fun GrammarWritingCheckScreen(
                     }
                 }
             }
+            if (records.isNotEmpty()) {
+                item { Text("作文紀錄", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
+                items(records, key = { "writing-${it.id}" }) { record ->
+                    Card(
+                        onClick = { selectedRecord = record },
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+                    ) {
+                        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(record.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(record.course, color = MaterialTheme.colorScheme.primary)
+                                val issueCount = runCatching { JSONArray(record.issuesJson).length() }.getOrDefault(0)
+                                Text("$issueCount 項修改", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Icon(Icons.Default.ChevronRight, "查看")
+                        }
+                    }
+                }
+            }
             if (weaknesses.isNotEmpty()) item { Text("已累積 ${weaknesses.size} 項寫作弱點", color = MaterialTheme.colorScheme.primary) }
         }
     }
@@ -969,12 +1076,16 @@ fun GrammarQuizHubScreen(
     modifier: Modifier = Modifier
 ) {
     val courses = remember(notes) { notes.map { it.course }.filter(String::isNotBlank).distinct() }
-    val grammarTypes = remember(notes) { notes.map { it.title }.filter(String::isNotBlank).distinct() }
     var selectedCourse by rememberSaveable { mutableStateOf<String?>(null) }
-    var selectedType by rememberSaveable { mutableStateOf<String?>(null) }
+    val folders = remember(notes, selectedCourse) {
+        notes.filter { selectedCourse == null || it.course == selectedCourse }
+            .map { it.folder }.filter(String::isNotBlank).distinct()
+    }
+    var selectedFolder by rememberSaveable { mutableStateOf<String?>(null) }
     var courseMenu by remember { mutableStateOf(false) }
-    var typeMenu by remember { mutableStateOf(false) }
-    val selectedNotes = notes.filter { (selectedCourse == null || it.course == selectedCourse) && (selectedType == null || it.title == selectedType) }
+    var folderMenu by remember { mutableStateOf(false) }
+    LaunchedEffect(selectedCourse) { if (selectedFolder !in folders) selectedFolder = null }
+    val selectedNotes = notes.filter { (selectedCourse == null || it.course == selectedCourse) && (selectedFolder == null || it.folder == selectedFolder) }
     val selectedIds = selectedNotes.map { it.id }.toSet()
     val selectedQuestions = questions.filter { it.grammarNoteId in selectedIds }
     LazyColumn(
@@ -983,7 +1094,7 @@ fun GrammarQuizHubScreen(
     ) {
         item { Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             GrammarFilterMenu("課程", selectedCourse ?: "全部課程", courses, courseMenu, { courseMenu = it }, { selectedCourse = it }, Modifier.weight(1f))
-            GrammarFilterMenu("文法類型", selectedType ?: "全部類型", grammarTypes, typeMenu, { typeMenu = it }, { selectedType = it }, Modifier.weight(1f))
+            GrammarFilterMenu("資料夾", selectedFolder ?: "全部資料夾", folders, folderMenu, { folderMenu = it }, { selectedFolder = it }, Modifier.weight(1f))
         } }
         item {
             Button(
@@ -996,7 +1107,7 @@ fun GrammarQuizHubScreen(
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))) {
                 Column(Modifier.fillMaxWidth().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("目前範圍還沒有測驗題", fontWeight = FontWeight.Bold)
-                    TextButton(onClick = { onGenerateAiTopicQuiz(selectedType ?: selectedCourse ?: "綜合文法") }) { Icon(Icons.Default.AutoAwesome, null); Spacer(Modifier.width(4.dp)); Text("AI 建立題目") }
+                    TextButton(onClick = { onGenerateAiTopicQuiz(selectedFolder ?: selectedCourse ?: "綜合文法") }) { Icon(Icons.Default.AutoAwesome, null); Spacer(Modifier.width(4.dp)); Text("AI 建立題目") }
                 }
             }
         }

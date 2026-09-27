@@ -12,6 +12,7 @@ import com.example.data.dao.StudyLogDao
 import com.example.data.dao.GrammarNoteDao
 import com.example.data.dao.GrammarQuestionDao
 import com.example.data.dao.GrammarContentDao
+import com.example.data.dao.GrammarWritingDao
 import com.example.data.entity.Deck
 import com.example.data.entity.Flashcard
 import com.example.data.entity.StudyLog
@@ -20,10 +21,11 @@ import com.example.data.entity.GrammarQuestion
 import com.example.data.entity.GrammarWeakness
 import com.example.data.entity.GrammarPattern
 import com.example.data.entity.GrammarExample
+import com.example.data.entity.GrammarWritingRecord
 
 @Database(
-    entities = [Deck::class, Flashcard::class, StudyLog::class, GrammarNote::class, GrammarQuestion::class, GrammarWeakness::class, GrammarPattern::class, GrammarExample::class],
-    version = 9,
+    entities = [Deck::class, Flashcard::class, StudyLog::class, GrammarNote::class, GrammarQuestion::class, GrammarWeakness::class, GrammarPattern::class, GrammarExample::class, GrammarWritingRecord::class],
+    version = 10,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -33,6 +35,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun grammarNoteDao(): GrammarNoteDao
     abstract fun grammarQuestionDao(): GrammarQuestionDao
     abstract fun grammarContentDao(): GrammarContentDao
+    abstract fun grammarWritingDao(): GrammarWritingDao
 
     companion object {
         val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -223,6 +226,27 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("UPDATE grammar_patterns SET nextReviewAt = (SELECT nextReviewAt FROM grammar_notes WHERE grammar_notes.id = grammar_patterns.grammarNoteId)")
             }
         }
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE grammar_notes ADD COLUMN folder TEXT NOT NULL DEFAULT '未分類'")
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS grammar_writing_records (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        course TEXT NOT NULL,
+                        title TEXT NOT NULL,
+                        originalText TEXT NOT NULL,
+                        revisedText TEXT NOT NULL,
+                        issuesJson TEXT NOT NULL DEFAULT '[]',
+                        createdAt INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_grammar_writing_records_course ON grammar_writing_records(course)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_grammar_writing_records_updatedAt ON grammar_writing_records(updatedAt)")
+            }
+        }
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -240,7 +264,8 @@ abstract class AppDatabase : RoomDatabase() {
                     MIGRATION_5_6,
                     MIGRATION_6_7,
                     MIGRATION_7_8,
-                    MIGRATION_8_9
+                    MIGRATION_8_9,
+                    MIGRATION_9_10
                 ).build()
                 INSTANCE = instance
                 instance

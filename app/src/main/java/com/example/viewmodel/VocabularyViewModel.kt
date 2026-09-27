@@ -9,6 +9,8 @@ import com.example.data.dictionary.DictionaryEngine
 import com.example.data.dictionary.DictionaryEntry
 import com.example.data.dictionary.GoogleTranslateLookupService
 import com.example.data.dictionary.FreeDictionaryLookupService
+import com.example.data.dictionary.CambridgeDictionaryLookupService
+import com.example.data.dictionary.WiktionaryLookupService
 import com.example.data.dictionary.MyMemoryTranslateLookupService
 import com.example.data.entity.Deck
 import com.example.data.entity.Flashcard
@@ -20,6 +22,7 @@ import com.example.data.entity.GrammarQuestionDraft
 import com.example.data.entity.GrammarWeakness
 import com.example.data.entity.GrammarWritingIssue
 import com.example.data.entity.GrammarWritingScanResult
+import com.example.data.entity.GrammarWritingRecord
 import com.example.data.entity.GrammarPattern
 import com.example.data.entity.GrammarPatternDraft
 import com.example.data.entity.GrammarExample
@@ -147,6 +150,11 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
         initialValue = emptyList()
     )
     val grammarWeaknesses: StateFlow<List<GrammarWeakness>> = db.grammarQuestionDao().getAllWeaknesses().stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+    val grammarWritingRecords: StateFlow<List<GrammarWritingRecord>> = db.grammarWritingDao().getAll().stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = emptyList()
@@ -596,7 +604,8 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
             structure、usage、commonMistakes、comparison 可用換行分隔；tags、acceptedAnswers、options 用逗號分隔。
             questions 每題格式：grammarPatternIndex, type, prompt, translation, answer, acceptedAnswers, options, explanation, difficulty。
             prompt 必須用 {{answer}} 標記唯一挖空位置，答案填回後必須成為自然完整的英文句子。
-            options 必須包含 answer、不得重複，最多四個。每個例句至少建立一題，並另外補足至 6～12 題；grammarPatternIndex 必須正確指向所屬句型。
+            options 必須包含 answer、不得重複，最多四個，且正確答案不可固定放第一個。
+            全篇合計必須剛好 6 個例句與 10 題。前 2 題是基本概念選擇題，其餘 8 題以句子應用為主，包含動詞形式（V-ing、to V 等）、挖空、改錯、翻譯或重組；grammarPatternIndex 必須正確指向所屬句型。
             不確定的內容留空，不可捏造來源。
 
             使用者要求：${request.trim()}
@@ -672,12 +681,12 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
         }.also { require(it.isNotEmpty()) { "分享檔沒有可匯入的文法" } }
     }
 
-    suspend fun generateGrammarDraftFromImages(uris: List<Uri>): GrammarDraft = generateGrammarDraftsFromSources(uris).first()
+    suspend fun generateGrammarDraftFromImages(uris: List<Uri>): GrammarDraft = generateGrammarDraftsFromSources(uris, "ENRICH").first()
 
     suspend fun generateGrammarDraftFromSources(uris: List<Uri>, mode: String = "FAITHFUL"): GrammarDraft =
         generateGrammarDraftsFromSources(uris, mode).first()
 
-    suspend fun generateGrammarDraftsFromSources(uris: List<Uri>, mode: String = "FAITHFUL"): List<GrammarDraft> {
+    suspend fun generateGrammarDraftsFromSources(uris: List<Uri>, mode: String = "ENRICH"): List<GrammarDraft> {
         require(settings.value.aiEnabled) { "請先在設定中啟用 AI" }
         require(uris.isNotEmpty()) { "請先選擇圖片或檔案" }
         val context = getApplication<Application>()
@@ -702,11 +711,12 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
             只回傳 JSON 物件 {"notes":[...]}，不要 Markdown。每篇欄位：title, category, level, summary, commonMistakes, comparison, tags, patterns, questions。
             patterns 每組包含 title, formula, meaning, usage, notes, examples；examples 包含 sentence, translation, highlightedText。
             questions 每題包含 grammarPatternIndex, type, prompt, translation, answer, acceptedAnswers, options, explanation, difficulty；題目中以 {{answer}} 標記唯一答案位置。
-            圖片沒有題目時 questions 回傳空陣列；看不清楚的內容留空。
+            教材已有的規則、句型與例句必須優先保留；看不清楚的內容留空，不可猜測原文。
+            每篇完成稿必須補齊為剛好 6 個例句與 10 題。前 2 題為基本概念選擇題，後 8 題為應用題，依內容加入 V-ing、to V、時態、介系詞挖空、改錯、翻譯或重組。options 必須包含答案但不可固定把答案放第一個。
             辨識模式：${when (mode) {
                 "ENRICH" -> "AI 補充：忠實保留原文，補齊自然例句、常見錯誤與練習題。每個例句至少要有一題，題目需涵蓋整個文法類型；補充題 sourceType 設為 AI。"
                 "ORGANIZE" -> "AI 整理：不可改變原意，可重整段落與欄位，並依原文建立題目。"
-                else -> "忠實擷取：只能使用文件確實存在的內容，不得補充例句、規則或題目。"
+                else -> "AI 補齊：先忠實保留文件內容，再補齊缺少的句型、例句、補充說明與題目。"
             }}
             """.trimIndent() + if (extractedText.isBlank()) "" else "\n\n文件文字：\n$extractedText",
             payloads
@@ -912,6 +922,41 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
                 _dataMessage.value = "建立弱點練習失敗：${it.message ?: "未知錯誤"}"
             }
         }
+    }
+
+    fun saveGrammarWritingRecord(
+        title: String,
+        course: String,
+        originalText: String,
+        revisedText: String,
+        issues: List<GrammarWritingIssue>,
+        onComplete: (Long) -> Unit = {}
+    ) {
+        if (title.isBlank() || originalText.isBlank()) return
+        viewModelScope.launch {
+            val payload = JSONArray().apply {
+                issues.forEach { issue -> put(JSONObject().apply {
+                    put("ruleKey", issue.ruleKey); put("title", issue.title)
+                    put("originalSentence", issue.originalSentence); put("correctedSentence", issue.correctedSentence)
+                    put("originalText", issue.originalText); put("correctedText", issue.correctedText)
+                    put("explanation", issue.explanation)
+                }) }
+            }.toString()
+            val id = db.grammarWritingDao().insert(
+                GrammarWritingRecord(
+                    course = course.ifBlank { "通用" },
+                    title = title.trim(),
+                    originalText = originalText,
+                    revisedText = revisedText.ifBlank { originalText },
+                    issuesJson = payload
+                )
+            )
+            onComplete(id)
+        }
+    }
+
+    fun deleteGrammarWritingRecord(record: GrammarWritingRecord) {
+        viewModelScope.launch { db.grammarWritingDao().delete(record) }
     }
 
     fun moveCard(card: Flashcard, direction: Int) {
@@ -1679,16 +1724,22 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
                         .getOrElse { backupError -> error("Google：${googleError.message}\n備用翻譯：${backupError.message}") }
                 }
             settings.value.dictionarySource == "GOOGLE" -> GoogleTranslateLookupService.lookup(word).let { GoogleTranslateLookupService.translateExample(it) }
+            settings.value.dictionarySource == "CAMBRIDGE" -> runCatching { CambridgeDictionaryLookupService.lookup(word) }
+                .getOrElse { WiktionaryLookupService.lookup(word) }
+            settings.value.dictionarySource == "WIKTIONARY" -> WiktionaryLookupService.lookup(word)
             settings.value.dictionarySource == "FREE" -> FreeDictionaryLookupService.lookup(word)
             else -> runCatching {
                 GoogleTranslateLookupService.lookup(word).let { GoogleTranslateLookupService.translateExample(it) }
             }.getOrElse { googleError ->
-                runCatching { FreeDictionaryLookupService.lookup(word) }
-                    .getOrElse { freeError -> runCatching { MyMemoryTranslateLookupService.lookupEnglish(word) }
-                        .getOrElse { translateError ->
-                            error("Google：${googleError.message}\n備用字典：${freeError.message}\n備用翻譯：${translateError.message}")
+                runCatching { CambridgeDictionaryLookupService.lookup(word) }.getOrElse { cambridgeError ->
+                    runCatching { WiktionaryLookupService.lookup(word) }.getOrElse { wiktionaryError ->
+                        runCatching { FreeDictionaryLookupService.lookup(word) }.getOrElse { freeError ->
+                            runCatching { MyMemoryTranslateLookupService.lookupEnglish(word) }.getOrElse { translateError ->
+                                error("Google：${googleError.message}\n劍橋：${cambridgeError.message}\n維基：${wiktionaryError.message}\n免費字典：${freeError.message}\n備用翻譯：${translateError.message}")
+                            }
                         }
                     }
+                }
             }
         }
     }
@@ -2418,6 +2469,29 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
                             payload = JSONObject().put("name", current.name).put("category", current.category).toString()
                         )
                     }
+                    "UPDATE_GRAMMAR" -> {
+                        val payload = JSONObject(action.payload)
+                        val current = db.grammarNoteDao().getById(action.deckId)
+                            ?: error("找不到要修改的文法")
+                        val updated = current.copy(
+                            course = payload.optString("course", current.course).trim().ifBlank { current.course },
+                            folder = payload.optString("folder", current.folder).trim().ifBlank { current.folder },
+                            title = payload.optString("title", current.title).trim().ifBlank { current.title },
+                            category = payload.optString("category", current.category).trim().ifBlank { current.category },
+                            level = payload.optString("level", current.level).trim().ifBlank { current.level },
+                            summary = payload.optString("summary", current.summary).trim().ifBlank { current.summary },
+                            tags = payload.optString("tags", current.tags).trim(),
+                            updatedAt = System.currentTimeMillis()
+                        )
+                        db.grammarNoteDao().update(updated)
+                        AssistantPendingAction(
+                            id = UUID.randomUUID().toString(), type = "RESTORE_GRAMMAR", deckId = current.id,
+                            title = "復原文法修改", description = "恢復「${current.title}」修改前的基本資料",
+                            payload = JSONObject().put("course", current.course).put("folder", current.folder)
+                                .put("title", current.title).put("category", current.category).put("level", current.level)
+                                .put("summary", current.summary).put("tags", current.tags).toString()
+                        )
+                    }
                     "TRANSFER_CARDS" -> executeAssistantCardTransfer(action)
                     "ADD_CARDS" -> executeAssistantAddCards(action)
                     "ENRICH_CARDS" -> executeAssistantCardEnrichment(action)
@@ -2501,6 +2575,16 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
                             ?: error("找不到資料夾")
                         val payload = JSONObject(action.payload)
                         repository.updateDeck(deck.copy(name = payload.getString("name"), category = payload.getString("category")))
+                    }
+                    "RESTORE_GRAMMAR" -> {
+                        val current = db.grammarNoteDao().getById(action.deckId) ?: error("找不到文法")
+                        val payload = JSONObject(action.payload)
+                        db.grammarNoteDao().update(current.copy(
+                            course = payload.getString("course"), folder = payload.getString("folder"),
+                            title = payload.getString("title"), category = payload.getString("category"),
+                            level = payload.getString("level"), summary = payload.getString("summary"),
+                            tags = payload.getString("tags"), updatedAt = System.currentTimeMillis()
+                        ))
                     }
                     "RESTORE_CARD_LOCATIONS" -> {
                         val mappings = JSONArray(action.payload)
@@ -2992,6 +3076,27 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
         val type = result.optString("type", "REPLY").uppercase()
         val message = formatAssistantDisplayText(result.optString("message")).ifBlank { "已完成分析。" }
         when (type) {
+            "UPDATE_GRAMMAR" -> {
+                val note = allGrammarNotes.value.firstOrNull { it.id == result.optLong("grammarId") }
+                if (note == null) appendAssistantMessage("ASSISTANT", "找不到要編輯的文法筆記。")
+                else {
+                    val payload = JSONObject()
+                        .put("course", result.optString("course", note.course))
+                        .put("folder", result.optString("folder", note.folder))
+                        .put("title", result.optString("title", note.title))
+                        .put("category", result.optString("category", note.category))
+                        .put("level", result.optString("level", note.level))
+                        .put("summary", result.optString("summary", note.summary))
+                        .put("tags", result.optString("tags", note.tags))
+                    _assistantPendingAction.value = AssistantPendingAction(
+                        id = UUID.randomUUID().toString(), type = "UPDATE_GRAMMAR", deckId = note.id,
+                        title = "更新文法「${note.title}」",
+                        description = "課程：${payload.optString("course")}\n資料夾：${payload.optString("folder")}\n標題：${payload.optString("title")}\n確認後才會套用。",
+                        payload = payload.toString()
+                    )
+                    appendAssistantMessage("ASSISTANT", "文法修改內容已準備好，請先確認。", kind = "STATUS")
+                }
+            }
             "UPDATE_FOLDER" -> {
                 val deck = allDecks.value.firstOrNull { it.id == result.optLong("deckId") } ?: fallbackDeck
                 if (deck == null || deck.id !in _assistantSelectedDeckIds.value) {
@@ -3154,6 +3259,11 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
                 .put("repetitionCount", it.repetitionCount)
                 .put("isMastered", it.isMastered)
         })
+        val grammarList = JSONArray(allGrammarNotes.value.take(120).map {
+            JSONObject().put("id", it.id).put("course", it.course).put("folder", it.folder)
+                .put("title", it.title).put("category", it.category).put("level", it.level)
+                .put("summary", it.summary).put("tags", it.tags)
+        })
         val logSummary = recentStudyLogs.value.groupBy { it.cardId }.entries
             .mapNotNull { (cardId, logs) ->
                 allCards.value.firstOrNull { it.id == cardId }?.let { card ->
@@ -3186,7 +3296,7 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
             物理、化學與數學符號優先使用標準 LaTeX（例如 \\alpha、\\sqrt{x}、\\frac{a}{b}），
             但不要為普通短句加入多餘格式，也不要輸出 HTML。
 
-            type 只能是 REPLY、CREATE_FOLDER、UPDATE_FOLDER、TRANSFER_CARDS、ADD_CARDS、SPLIT_FOLDER、
+            type 只能是 REPLY、CREATE_FOLDER、UPDATE_FOLDER、UPDATE_GRAMMAR、TRANSFER_CARDS、ADD_CARDS、SPLIT_FOLDER、
             MERGE_FOLDERS、ENRICH_CARDS、AUDIT_REPORT、CREATE_WEAKNESS_FOLDER、UPDATE_DAILY_PLAN、
             LEARNING_ANALYSIS、SORT、COUNTABILITY、ARTICLE、CONFUSABLES、QUIZ。
             通用格式：{"type":"REPLY","message":"繁體中文回覆","deckId":0}
@@ -3196,6 +3306,8 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
             message 要詢問使用者要放在哪個課程，絕對不可自行選擇「通用」或猜測課程。
             不可聲稱已建立；App 會顯示確認卡並檢查同一課程內的重複名稱。
             UPDATE_FOLDER：{"type":"UPDATE_FOLDER","deckId":1,"name":"新名稱，未改則保留","category":"新課程，未改則保留"}
+            UPDATE_GRAMMAR：{"type":"UPDATE_GRAMMAR","grammarId":1,"course":"課程","folder":"資料夾","title":"標題","category":"分類","level":"程度","summary":"摘要","tags":"標籤"}
+            只有使用者明確要求修改既有文法時使用；grammarId 必須來自可讀取的文法資料，未要求改動的欄位必須原樣回傳。App 會先顯示確認卡。
             TRANSFER_CARDS：{"type":"TRANSFER_CARDS","mode":"MOVE或COPY","targetDeckId":2,"cardIds":[1,2]}
             ADD_CARDS：{"type":"ADD_CARDS","targetDeckId":2,"cards":[{"word":"","phonetic":"","partOfSpeech":"","definition":"","exampleSentence":"","exampleTranslation":""}]}
             外部推薦字必須是可靠英文知識，且不可聲稱原本存在 App。
@@ -3230,6 +3342,7 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
             目前明確指定的資料夾：${deck?.let { "${it.name}（id=${it.id}）" } ?: "未指定或多選"}
             可用資料夾：$deckList
             可讀取的 App 卡片：$cardList
+            可讀取及可在確認後編輯的文法筆記：$grammarList
             真實學習摘要（依低評分排序）：${JSONArray(logSummary)}
             測驗進度摘要（已壓縮，這是 App 保存的真實狀態）：
             ${quizHistory.ifBlank { "尚無測驗紀錄" }}

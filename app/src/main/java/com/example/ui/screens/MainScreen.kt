@@ -109,9 +109,9 @@ fun MainScreen(
         snapshotFlow { pagerState.settledPage }
             .distinctUntilChanged()
             .collect { page ->
-                if (page != currentTab) {
-                    onTabSelected(page)
-                }
+                // Always report the settled page. The previous conditional captured
+                // an old currentTab value and left the bottom bar behind after swipes.
+                onTabSelected(page)
             }
     }
 

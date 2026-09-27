@@ -131,6 +131,7 @@ fun VocabApp(
     val grammarPatterns by viewModel.allGrammarPatterns.collectAsStateWithLifecycle()
     val grammarExamples by viewModel.allGrammarExamples.collectAsStateWithLifecycle()
     val grammarWeaknesses by viewModel.grammarWeaknesses.collectAsStateWithLifecycle()
+    val grammarWritingRecords by viewModel.grammarWritingRecords.collectAsStateWithLifecycle()
 
     var currentTab by remember { mutableIntStateOf(0) }
     var editingCard by remember { mutableStateOf<Flashcard?>(null) }
@@ -149,6 +150,7 @@ fun VocabApp(
     var editingGrammar by remember { mutableStateOf<GrammarNote?>(null) }
     var launchGrammarAi by remember { mutableStateOf(false) }
     var grammarImportDrafts by remember { mutableStateOf<List<GrammarDraft>>(emptyList()) }
+    var pendingGrammarDraft by remember { mutableStateOf<GrammarDraft?>(null) }
     var grammarQuizResult by remember { mutableStateOf<GrammarQuizResult?>(null) }
     var grammarQuizFilterIds by remember { mutableStateOf<Set<Long>?>(null) }
     var showSwitchConfirmDialog by remember { mutableStateOf(false) }
@@ -916,7 +918,11 @@ fun VocabApp(
                 onImportShare = viewModel::readGrammarShare,
                 onPreview = { drafts ->
                     grammarImportDrafts = drafts
-                    navController.navigate(Routes.GRAMMAR_IMPORT_PREVIEW)
+                    if (drafts.size == 1) {
+                        editingGrammar = null
+                        pendingGrammarDraft = drafts.first()
+                        navController.navigate(Routes.GRAMMAR_EDITOR)
+                    } else navController.navigate(Routes.GRAMMAR_IMPORT_PREVIEW)
                 }
             )
         }
@@ -943,11 +949,13 @@ fun VocabApp(
             val editingQuestions = grammarQuestions.filter { it.grammarNoteId == editingGrammar?.id }
             GrammarEditorScreen(
                 note = editingGrammar,
+                initialDraft = pendingGrammarDraft,
                 questions = editingQuestions,
                 patterns = grammarPatterns.filter { it.grammarNoteId == editingGrammar?.id },
                 examples = grammarExamples.filter { it.grammarNoteId == editingGrammar?.id },
                 courses = (decks.map { it.category } + grammarNotes.map { it.course })
                     .filter(String::isNotBlank).distinct(),
+                folders = grammarNotes.map { it.folder }.filter(String::isNotBlank).distinct(),
                 categories = grammarNotes.map { it.category }.filter(String::isNotBlank).distinct(),
                 levels = grammarNotes.map { it.level }.filter(String::isNotBlank).distinct(),
                 initialShowAiDialog = launchGrammarAi,
@@ -960,9 +968,10 @@ fun VocabApp(
                             popUpTo(Routes.GRAMMAR_EDITOR) { inclusive = true }
                         }
                         launchGrammarAi = false
+                        pendingGrammarDraft = null
                     }
                 },
-                onBack = { launchGrammarAi = false; navController.popBackStack() }
+                onBack = { launchGrammarAi = false; pendingGrammarDraft = null; navController.popBackStack() }
             )
         }
 
@@ -1061,9 +1070,15 @@ fun VocabApp(
         composable(Routes.GRAMMAR_WRITING_CHECK) {
             GrammarWritingCheckScreen(
                 weaknesses = grammarWeaknesses,
+                records = grammarWritingRecords,
+                courses = (decks.map { it.category } + grammarNotes.map { it.course }).filter(String::isNotBlank).distinct(),
                 onCheck = viewModel::checkGrammarWriting,
                 onRecognizeSources = viewModel::recognizeGrammarWritingSources,
                 onAccept = viewModel::acceptGrammarWritingIssue,
+                onSaveRecord = { title, course, original, revised, issues ->
+                    viewModel.saveGrammarWritingRecord(title, course, original, revised, issues)
+                },
+                onDeleteRecord = viewModel::deleteGrammarWritingRecord,
                 onBack = { navController.popBackStack() }
             )
         }

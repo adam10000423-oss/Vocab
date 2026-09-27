@@ -11,6 +11,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -65,6 +68,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -367,14 +371,18 @@ fun AddEditCardScreen(
 
     val currentFolder = decks.firstOrNull { it.id == selectedDeckId }
     val listState = rememberLazyListState()
+    val density = LocalDensity.current
+    val keyboardVisible = WindowInsets.ime.getBottom(density) > 0
     var requestedFocusCard by remember { mutableStateOf<EditableCardState?>(null) }
 
     LaunchedEffect(isInitialized, initialFocusCardId, selectedDeckId) {
         if (!isInitialized || initialFocusCardId == null) return@LaunchedEffect
         val index = editableCards.indexOfFirst { it.originalId == initialFocusCardId }
         if (index >= 0) {
-            requestedFocusCard = editableCards[index]
-            listState.animateScrollToItem(index * 2 + 2)
+            // Opening from the management list only reveals the card. Focus and the
+            // keyboard are reserved for an explicit tap by the user.
+            requestedFocusCard = null
+            listState.animateScrollToItem(index + 2)
         }
     }
 
@@ -383,11 +391,12 @@ fun AddEditCardScreen(
         editableCards.add(index.coerceIn(0, editableCards.size), newCard)
         requestedFocusCard = newCard
         coroutineScope.launch {
-            listState.animateScrollToItem((index * 2 + 2).coerceAtLeast(0))
+            listState.animateScrollToItem((index + 2).coerceAtLeast(0))
         }
     }
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
                 expandedHeight = 48.dp,
@@ -487,6 +496,7 @@ fun AddEditCardScreen(
                 .padding(innerPadding)
                 .padding(top = 6.dp)
                 .padding(horizontal = 14.dp)
+                .navigationBarsPadding()
                 .imePadding(),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -602,7 +612,7 @@ fun AddEditCardScreen(
             }
 
             item {
-                Spacer(modifier = Modifier.height(60.dp))
+                if (!keyboardVisible) Spacer(modifier = Modifier.height(60.dp))
             }
         }
     }

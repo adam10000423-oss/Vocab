@@ -825,18 +825,20 @@ fun SettingsScreen(
                     SettingDropdown(
                         label = "線上字典來源",
                         value = settings.dictionarySource,
-                        options = listOf("AUTO", "GOOGLE", "FREE"),
+                        options = listOf("AUTO", "GOOGLE", "CAMBRIDGE", "WIKTIONARY", "FREE"),
                         optionText = {
                             when (it) {
                                 "GOOGLE" -> "Google 翻譯"
+                                "CAMBRIDGE" -> "劍橋英漢辭典"
+                                "WIKTIONARY" -> "維基詞典"
                                 "FREE" -> "Free Dictionary（英文解釋）"
-                                else -> "自動選擇（Google 失敗時切換備用字典）"
+                                else -> "自動選擇（依序切換可用來源）"
                             }
                         },
                         onSelected = onDictionarySourceChange
                     )
                     Text(
-                        "自動模式遇到 429、逾時或查無結果時會改用免費英文字典；中文內容可再使用 AI 補齊。Cambridge 需官方 API 授權，因此不會以不穩定的網頁爬取方式內建。",
+                        "自動模式遇到 429、逾時或查無結果時，會依序嘗試劍橋、維基詞典、Free Dictionary 與備用翻譯；中文查詢會優先翻成英文。網頁來源若改版，可能暫時無法解析。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -991,6 +993,25 @@ fun SettingsScreen(
                         Text("檢查更新")
                     }
                     availableRelease?.let { release ->
+                        val cachedApk = downloadedApk?.takeIf(File::exists)
+                        if (cachedApk == null) {
+                            Button(
+                                onClick = { downloadAndInstall(release) },
+                                enabled = !updateBusy,
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text("下載並安裝 Vocab ${release.version}") }
+                        } else {
+                            Button(
+                                onClick = { openInstaller(cachedApk) },
+                                enabled = !updateBusy,
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text("再次安裝 Vocab ${release.version}") }
+                            OutlinedButton(
+                                onClick = { downloadAndInstall(release, forceDownload = true) },
+                                enabled = !updateBusy,
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text("重新下載安裝檔") }
+                        }
                         if (release.notes.isNotBlank()) {
                             Text("更新日誌", fontWeight = FontWeight.Bold)
                             Text(
@@ -1001,31 +1022,6 @@ fun SettingsScreen(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                        }
-                        val cachedApk = downloadedApk?.takeIf(File::exists)
-                        if (cachedApk == null) {
-                            Button(
-                                onClick = { downloadAndInstall(release) },
-                                enabled = !updateBusy,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text("下載並安裝 Vocab ${release.version}")
-                            }
-                        } else {
-                            Button(
-                                onClick = { openInstaller(cachedApk) },
-                                enabled = !updateBusy,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text("再次安裝 Vocab ${release.version}")
-                            }
-                            OutlinedButton(
-                                onClick = { downloadAndInstall(release, forceDownload = true) },
-                                enabled = !updateBusy,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text("重新下載安裝檔")
-                            }
                         }
                         Text(
                             "安裝取消或失敗時會保留這份 APK，可直接再次安裝；重新下載或成功升級後會自動清除舊檔。",

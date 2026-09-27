@@ -3,6 +3,7 @@ package com.example.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -19,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -40,6 +42,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -50,6 +55,7 @@ import com.example.data.assistant.AssistantMessage
 import com.example.data.entity.Flashcard
 import com.example.data.entity.Deck
 import com.example.ui.components.AddFolderDialog
+import com.example.ui.components.FlipCard
 import org.json.JSONObject
 
 private data class ReadingTranslation(val sentence: String, val translation: String)
@@ -152,38 +158,31 @@ fun InteractiveReadingScreen(
 
     selectedCard?.let { card ->
         var showBack by remember(card.id) { mutableStateOf(false) }
-        AlertDialog(
+        Dialog(
             onDismissRequest = { onStopSpeaking(); selectedCard = null },
-            title = { Text(card.word, fontWeight = FontWeight.Bold) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (card.phonetic.isNotBlank()) Text(card.phonetic, color = MaterialTheme.colorScheme.primary)
-                    if (showBack) {
-                        if (card.partOfSpeech.isNotBlank()) Text(card.partOfSpeech, fontWeight = FontWeight.Bold)
-                        Text(card.definition)
-                        if (card.exampleSentence.isNotBlank()) Text(card.exampleSentence, style = MaterialTheme.typography.bodySmall)
-                        if (card.exampleTranslation.isNotBlank()) Text(card.exampleTranslation, style = MaterialTheme.typography.bodySmall)
-                    } else {
-                        Text("先想想意思，再翻面確認。", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = { onSpeak(card.word) }, modifier = Modifier.weight(1f)) {
-                            Icon(Icons.AutoMirrored.Filled.VolumeUp, null)
-                            Text("發音")
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Box(Modifier.fillMaxSize().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
+                Box(Modifier.fillMaxWidth()) {
+                    FlipCard(
+                        card = card,
+                        isFlipped = showBack,
+                        onFlip = { showBack = !showBack },
+                        onSpeak = onSpeak,
+                        onToggleFavorite = {},
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    IconButton(
+                        onClick = { onStopSpeaking(); selectedCard = null },
+                        modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
+                    ) {
+                        Surface(shape = androidx.compose.foundation.shape.CircleShape, color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)) {
+                            Icon(Icons.Default.Close, "關閉", modifier = Modifier.padding(8.dp))
                         }
                     }
-                    OutlinedButton(onClick = { cardToAdd = card }, modifier = Modifier.fillMaxWidth()) {
-                        Icon(Icons.Default.Folder, null)
-                        Text("加入其他資料夾")
-                    }
-                    copyStatus?.let {
-                        Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-                    }
                 }
-            },
-            confirmButton = { Button(onClick = { showBack = !showBack }) { Text(if (showBack) "看正面" else "翻面") } },
-            dismissButton = { TextButton(onClick = { onStopSpeaking(); selectedCard = null }) { Text("關閉") } }
-        )
+            }
+        }
     }
 
     Scaffold(

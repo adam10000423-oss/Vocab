@@ -19,7 +19,7 @@ object FreeDictionaryLookupService {
         val word = rawWord.trim().lowercase()
         require(word.matches(Regex("[a-z][a-z' -]{0,79}"))) { "請輸入英文單字或短語" }
         val url = "https://api.dictionaryapi.dev/api/v2/entries/en/${java.net.URLEncoder.encode(word, "UTF-8")}".toHttpUrl()
-        val request = Request.Builder().url(url).header("User-Agent", "Vocab/2.7.1 Android").build()
+        val request = Request.Builder().url(url).header("User-Agent", "Vocab/2.8.0 Android").build()
         client.newCall(request).execute().use { response ->
             check(response.isSuccessful) {
                 if (response.code == 404) "免費英文字典找不到這個單字" else "免費英文字典暫時無法查詢（${response.code}）"

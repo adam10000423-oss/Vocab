@@ -271,7 +271,7 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setDictionarySource(source: String) = context.settingsDataStore.edit {
         it[Keys.dictionarySource] = source.takeIf { value ->
-            value in setOf("AUTO", "GOOGLE", "FREE")
+            value in setOf("AUTO", "GOOGLE", "CAMBRIDGE", "WIKTIONARY", "FREE")
         } ?: "AUTO"
     }
 

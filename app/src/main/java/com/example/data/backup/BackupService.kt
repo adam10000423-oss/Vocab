@@ -12,6 +12,7 @@ import com.example.data.entity.GrammarQuestion
 import com.example.data.entity.GrammarWeakness
 import com.example.data.entity.GrammarPattern
 import com.example.data.entity.GrammarExample
+import com.example.data.entity.GrammarWritingRecord
 import com.example.data.learning.StudyCheckInStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -35,9 +36,10 @@ class BackupService(
         val grammarWeaknesses = database.grammarQuestionDao().getAllWeaknesses().first()
         val grammarPatterns = database.grammarContentDao().getAllPatterns().first()
         val grammarExamples = database.grammarContentDao().getAllExamples().first()
+        val grammarWritingRecords = database.grammarWritingDao().getAll().first()
         val root = JSONObject()
             .put("format", "vocab-backup")
-            .put("version", 6)
+            .put("version", 7)
             .put("exportedAt", System.currentTimeMillis())
             .put("decks", JSONArray().apply {
                 decks.forEach { deck ->
@@ -62,7 +64,7 @@ class BackupService(
             .put("grammarNotes", JSONArray().apply {
                 grammarNotes.forEach { note ->
                     put(JSONObject()
-                        .put("id", note.id).put("course", note.course).put("title", note.title)
+                        .put("id", note.id).put("course", note.course).put("folder", note.folder).put("title", note.title)
                         .put("category", note.category).put("level", note.level)
                         .put("summary", note.summary).put("structure", note.structure).put("usage", note.usage)
                         .put("exampleSentence", note.exampleSentence).put("exampleTranslation", note.exampleTranslation)
@@ -113,6 +115,14 @@ class BackupService(
                     .put("lastOccurredAt", w.lastOccurredAt))
                 }
             })
+            .put("grammarWritingRecords", JSONArray().apply {
+                grammarWritingRecords.forEach { record -> put(JSONObject()
+                    .put("id", record.id).put("course", record.course).put("title", record.title)
+                    .put("originalText", record.originalText).put("revisedText", record.revisedText)
+                    .put("issuesJson", record.issuesJson).put("createdAt", record.createdAt)
+                    .put("updatedAt", record.updatedAt))
+                }
+            })
             .put("makeUpCheckIns", JSONArray(studyCheckInStore.currentDates().map(LocalDate::toString)))
         context.contentResolver.openOutputStream(uri, "w")!!.bufferedWriter().use { it.write(root.toString(2)) }
         cards.size
@@ -150,6 +160,7 @@ class BackupService(
         val grammarWeaknessItems = root.optJSONArray("grammarWeaknesses") ?: JSONArray()
         val grammarPatternItems = root.optJSONArray("grammarPatterns") ?: JSONArray()
         val grammarExampleItems = root.optJSONArray("grammarExamples") ?: JSONArray()
+        val grammarWritingItems = root.optJSONArray("grammarWritingRecords") ?: JSONArray()
         var imported = 0
         database.withTransaction {
             val existingDecks = database.deckDao().getAllDecks().first().toMutableList()
@@ -224,7 +235,7 @@ class BackupService(
                 val existingNote = existingGrammar.firstOrNull { it.title.equals(title, true) && it.course.equals(course, true) }
                 val newGrammarId = existingNote?.id ?: database.grammarNoteDao().insert(
                     GrammarNote(
-                        course = course, title = title, category = item.optString("category", "其他"),
+                        course = course, folder = item.optString("folder", "未分類").ifBlank { "未分類" }, title = title, category = item.optString("category", "其他"),
                         level = item.optString("level", "未分級"), summary = item.optString("summary"),
                         structure = item.optString("structure"), usage = item.optString("usage"),
                         exampleSentence = item.optString("exampleSentence"),
@@ -254,6 +265,20 @@ class BackupService(
                         explanation = item.optString("explanation"), sourceType = "IMPORT"
                     )
                 )
+            }
+            for (index in 0 until grammarWritingItems.length()) {
+                val item = grammarWritingItems.optJSONObject(index) ?: continue
+                val title = item.optString("title").trim()
+                if (title.isBlank()) continue
+                database.grammarWritingDao().insert(GrammarWritingRecord(
+                    course = item.optString("course", "通用").ifBlank { "通用" },
+                    title = title,
+                    originalText = item.optString("originalText"),
+                    revisedText = item.optString("revisedText"),
+                    issuesJson = item.optString("issuesJson", "[]"),
+                    createdAt = item.optLong("createdAt", System.currentTimeMillis()),
+                    updatedAt = item.optLong("updatedAt", System.currentTimeMillis())
+                ))
             }
             val grammarPatternIdMap = mutableMapOf<Long, Long>()
             for (index in 0 until grammarPatternItems.length()) {
