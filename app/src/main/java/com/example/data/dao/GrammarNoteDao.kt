@@ -26,6 +26,9 @@ interface GrammarNoteDao {
     @Update
     suspend fun update(note: GrammarNote)
 
+    @Update
+    suspend fun updateAll(notes: List<GrammarNote>)
+
     @Delete
     suspend fun delete(note: GrammarNote)
 

@@ -1,14 +1,22 @@
 package com.example.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -16,6 +24,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.data.entity.Deck
 
@@ -52,12 +62,9 @@ fun ImportDestinationSelector(
             onExpandedChange = { courseExpanded = it },
             modifier = Modifier.weight(1f)
         ) {
-            OutlinedTextField(
+            ImportDropdownAnchor(
+                label = "選擇課程",
                 value = selectedCourse.orEmpty(),
-                onValueChange = {},
-                readOnly = true,
-                label = { Text("選擇課程") },
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(courseExpanded) },
                 modifier = Modifier.menuAnchor().fillMaxWidth()
             )
             ExposedDropdownMenu(expanded = courseExpanded, onDismissRequest = { courseExpanded = false }) {
@@ -78,12 +85,9 @@ fun ImportDestinationSelector(
             onExpandedChange = { deckExpanded = it },
             modifier = Modifier.weight(1f)
         ) {
-            OutlinedTextField(
+            ImportDropdownAnchor(
+                label = "選擇資料夾",
                 value = courseDecks.firstOrNull { it.id == selectedDeckId }?.name.orEmpty(),
-                onValueChange = {},
-                readOnly = true,
-                label = { Text("選擇資料夾") },
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(deckExpanded) },
                 modifier = Modifier.menuAnchor().fillMaxWidth()
             )
             ExposedDropdownMenu(expanded = deckExpanded, onDismissRequest = { deckExpanded = false }) {
@@ -94,6 +98,39 @@ fun ImportDestinationSelector(
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun ImportDropdownAnchor(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .heightIn(min = 64.dp)
+            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1
+                )
+                Text(
+                    text = value,
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
         }
     }
 }

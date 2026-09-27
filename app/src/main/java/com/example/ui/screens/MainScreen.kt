@@ -86,7 +86,7 @@ fun MainScreen(
     val tabs = if (grammarMode) {
         listOf(
             MainTabSpec("總覽", Icons.Default.Home, "總覽", "nav_tab_home"),
-            MainTabSpec("筆記", Icons.Default.MenuBook, "筆記", "nav_tab_folders"),
+            MainTabSpec("文法庫", Icons.Default.MenuBook, "文法庫", "nav_tab_folders"),
             MainTabSpec("學習", Icons.Default.Style, "學習", "nav_tab_study"),
             MainTabSpec("測驗", Icons.Default.Quiz, "測驗", "nav_tab_quiz")
         )
@@ -128,6 +128,25 @@ fun MainScreen(
                             label = "main_page_title"
                         ) { (page, grammar) ->
                             Row(verticalAlignment = Alignment.CenterVertically) {
+                                androidx.compose.material3.Surface(
+                                    onClick = onToggleGrammarMode,
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.SwapHoriz,
+                                            contentDescription = "切換單字與文法",
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(Modifier.width(4.dp))
+                                        Text(if (grammar) "文法" else "單字", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                                    }
+                                }
                                 Text(
                                     text = if (grammar) {
                                         when (page) {
@@ -145,28 +164,9 @@ fun MainScreen(
                                         }
                                     },
                                     style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(start = 8.dp)
                                 )
-                                androidx.compose.material3.Surface(
-                                    onClick = onToggleGrammarMode,
-                                    shape = CircleShape,
-                                    color = MaterialTheme.colorScheme.primaryContainer,
-                                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    modifier = Modifier.padding(start = 10.dp)
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                                    ) {
-                                        Icon(
-                                            Icons.Default.SwapHoriz,
-                                            contentDescription = "切換單字與文法",
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(Modifier.width(4.dp))
-                                        Text(if (grammar) "文法" else "單字", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                                    }
-                                }
                             }
                         }
                     },

@@ -25,8 +25,8 @@ android {
     applicationId = "com.aistudio.vocabpulse.srsapp"
     minSdk = 24
     targetSdk = 36
-    versionCode = 19
-    versionName = "2.6.0"
+    versionCode = 20
+    versionName = "2.7.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     buildConfigField("String", "BACKEND_BASE_URL", "\"${backendBaseUrl.trimEnd('/')}\"")

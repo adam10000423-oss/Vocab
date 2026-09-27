@@ -939,6 +939,31 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
         viewModelScope.launch { repository.reorderCards(deckId, orderedCardIds) }
     }
 
+    fun reorderGrammarNotes(orderedNoteIds: List<Long>) {
+        if (orderedNoteIds.isEmpty()) return
+        viewModelScope.launch {
+            runCatching {
+                db.withTransaction {
+                    val all = db.grammarNoteDao().getAllOnce()
+                    val requestedIds = orderedNoteIds.distinct()
+                    require(requestedIds.size == orderedNoteIds.size) { "文法排序包含重複項目" }
+                    val requestedSet = requestedIds.toSet()
+                    require(requestedSet.all { id -> all.any { it.id == id } }) { "找不到要排序的文法" }
+                    val reordered = requestedIds.map { id -> requireNotNull(all.firstOrNull { it.id == id }) }
+                    var reorderedIndex = 0
+                    val merged = all.map { note ->
+                        if (note.id in requestedSet) reordered[reorderedIndex++] else note
+                    }
+                    db.grammarNoteDao().updateAll(
+                        merged.mapIndexed { index, note -> note.copy(sortOrder = index.toLong()) }
+                    )
+                }
+            }.onFailure {
+                _dataMessage.value = "調整文法順序失敗：${it.message ?: "未知錯誤"}"
+            }
+        }
+    }
+
     fun renameCourse(oldName: String, newName: String, onComplete: (Boolean) -> Unit = {}) {
         viewModelScope.launch {
             val success = runCatching {

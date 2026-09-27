@@ -379,6 +379,7 @@ fun VocabApp(
                                 navController.navigate(Routes.GRAMMAR_EDITOR)
                             },
                             onImport = { navController.navigate(Routes.GRAMMAR_IMPORT) },
+                            onReorderNotes = viewModel::reorderGrammarNotes,
                             onOpen = { note ->
                                 selectedGrammarId = note.id
                                 navController.navigate(Routes.GRAMMAR_DETAIL)

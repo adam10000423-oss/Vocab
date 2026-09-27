@@ -539,12 +539,12 @@ fun PhotoOcrScreen(
                     LazyColumn(
                         state = candidateListState,
                         verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxSize().padding(end = 52.dp)
+                        modifier = Modifier.fillMaxSize()
                     ) {
                         itemsIndexed(localCandidates) { index, candidate ->
                         Card(
                             shape = RoundedCornerShape(14.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Row(
@@ -624,18 +624,22 @@ fun PhotoOcrScreen(
                         }
                         }
                     }
-                    FloatingActionButton(
-                        onClick = { coroutineScope.launch { candidateListState.animateScrollToItem(0) } },
-                        modifier = Modifier.align(Alignment.TopEnd).size(44.dp)
-                    ) { Icon(Icons.Default.KeyboardArrowUp, "回到第一個單字") }
-                    FloatingActionButton(
-                        onClick = {
-                            coroutineScope.launch {
-                                candidateListState.animateScrollToItem((localCandidates.size - 1).coerceAtLeast(0))
-                            }
-                        },
-                        modifier = Modifier.align(Alignment.BottomEnd).size(44.dp)
-                    ) { Icon(Icons.Default.KeyboardArrowDown, "前往最後一個單字") }
+                    if (candidateListState.canScrollBackward) {
+                        FloatingActionButton(
+                            onClick = { coroutineScope.launch { candidateListState.animateScrollToItem(0) } },
+                            modifier = Modifier.align(Alignment.TopEnd).padding(8.dp).size(44.dp)
+                        ) { Icon(Icons.Default.KeyboardArrowUp, "回到第一個單字") }
+                    }
+                    if (candidateListState.canScrollForward) {
+                        FloatingActionButton(
+                            onClick = {
+                                coroutineScope.launch {
+                                    candidateListState.animateScrollToItem((localCandidates.size - 1).coerceAtLeast(0))
+                                }
+                            },
+                            modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp).size(44.dp)
+                        ) { Icon(Icons.Default.KeyboardArrowDown, "前往最後一個單字") }
+                    }
                 }
             } else if (!isOcrScanning && !isScannerLaunching) {
                 com.example.ui.components.CalmEmptyState(

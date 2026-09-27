@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -34,6 +36,8 @@ import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
 import kotlinx.coroutines.launch
 import java.io.File
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
 
 @Composable
 fun GrammarDashboardScreen(
@@ -54,33 +58,41 @@ fun GrammarDashboardScreen(
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(20.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // Hero Progress Card
         item {
             Card(
-                shape = RoundedCornerShape(22.dp),
+                shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
             ) {
-                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text("今日文法複習", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                            Text("待複習 ${due.size} 篇", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                            Text("今日文法複習", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                            Text("待複習 ${due.size} 個文法", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
                         }
                         Text("共 ${notes.size} 篇筆記", color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f))
                     }
-                    Button(
-                        enabled = notes.isNotEmpty(),
-                        onClick = { (due.firstOrNull() ?: notes.firstOrNull())?.let(onLearn) },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(Icons.Default.PlayArrow, contentDescription = null)
-                        Spacer(Modifier.width(6.dp))
-                        Text(if (due.isNotEmpty()) "開始待複習佇列 (${due.size})" else "開始文法學習")
-                    }
                 }
+            }
+        }
+
+        item {
+            Button(
+                enabled = notes.isNotEmpty(),
+                onClick = { (due.firstOrNull() ?: notes.firstOrNull())?.let(onLearn) },
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.fillMaxWidth().height(54.dp)
+            ) {
+                Icon(Icons.Default.PlayArrow, contentDescription = null)
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    if (due.isNotEmpty()) "開始複習（${due.size}）" else "開始文法學習",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
 
@@ -88,10 +100,10 @@ fun GrammarDashboardScreen(
         item {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    FilledTonalButton(onClick = onAdd, modifier = Modifier.weight(1f)) { Icon(Icons.Default.Add, null); Spacer(Modifier.width(5.dp)); Text("新增文法") }
-                    FilledTonalButton(onClick = onImport, modifier = Modifier.weight(1f)) { Icon(Icons.Default.DocumentScanner, null); Spacer(Modifier.width(5.dp)); Text("匯入") }
+                    FilledTonalButton(onClick = onAdd, shape = RoundedCornerShape(18.dp), modifier = Modifier.weight(1f).height(54.dp)) { Icon(Icons.Default.Add, null); Spacer(Modifier.width(5.dp)); Text("新增文法") }
+                    FilledTonalButton(onClick = onImport, shape = RoundedCornerShape(18.dp), modifier = Modifier.weight(1f).height(54.dp)) { Icon(Icons.Default.DocumentScanner, null); Spacer(Modifier.width(5.dp)); Text("匯入") }
                 }
-                OutlinedButton(onClick = onWritingCheck, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.Spellcheck, null); Spacer(Modifier.width(5.dp)); Text("寫作檢查") }
+                OutlinedButton(onClick = onWritingCheck, shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth().height(54.dp)) { Icon(Icons.Default.Spellcheck, null); Spacer(Modifier.width(5.dp)); Text("寫作檢查") }
             }
         }
 
@@ -124,7 +136,7 @@ fun GrammarDashboardScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("最近研讀筆記", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text("最近研讀筆記", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 TextButton(onClick = onSeeAllNotes) {
                     Text("查看全部 (${notes.size}) 篇 ➔")
                 }
@@ -160,42 +172,72 @@ fun GrammarNotesScreen(
     notes: List<GrammarNote>,
     onAdd: () -> Unit,
     onImport: () -> Unit,
+    onReorderNotes: (List<Long>) -> Unit,
     onOpen: (GrammarNote) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val now = System.currentTimeMillis()
     var searchQuery by rememberSaveable { mutableStateOf("") }
     val courses = remember(notes) { notes.map { it.course }.filter { it.isNotBlank() }.distinct() }
-    val categories = remember(notes) { notes.map { it.category }.filter { it.isNotBlank() }.distinct() }
+    val grammarTypes = remember(notes) { notes.map { it.title }.filter { it.isNotBlank() }.distinct() }
     var selectedCourse by rememberSaveable { mutableStateOf<String?>(null) }
-    var selectedCategory by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedType by rememberSaveable { mutableStateOf<String?>(null) }
     var courseMenu by remember { mutableStateOf(false) }
-    var categoryMenu by remember { mutableStateOf(false) }
+    var typeMenu by remember { mutableStateOf(false) }
 
-    val filteredNotes = remember(notes, searchQuery, selectedCourse, selectedCategory) {
+    val filteredNotes = remember(notes, searchQuery, selectedCourse, selectedType) {
         notes.filter { note ->
             val matchCourse = selectedCourse == null || note.course.equals(selectedCourse, ignoreCase = true)
-            val matchCategory = selectedCategory == null || note.category.equals(selectedCategory, ignoreCase = true)
+            val matchType = selectedType == null || note.title.equals(selectedType, ignoreCase = true)
             val matchQuery = searchQuery.isBlank() ||
                 note.title.contains(searchQuery, ignoreCase = true) ||
                 note.summary.contains(searchQuery, ignoreCase = true) ||
                 note.structure.contains(searchQuery, ignoreCase = true) ||
                 note.course.contains(searchQuery, ignoreCase = true)
-            matchCourse && matchCategory && matchQuery
+            matchCourse && matchType && matchQuery
+        }
+    }
+    val reorderEnabled = searchQuery.isBlank() && selectedType == null
+    val sourceNoteIds = if (reorderEnabled) filteredNotes.map { it.id } else emptyList()
+    var displayedNoteIds by remember(sourceNoteIds) { mutableStateOf(sourceNoteIds) }
+    val displayedNotes = if (reorderEnabled) {
+        displayedNoteIds.mapNotNull { id -> filteredNotes.firstOrNull { it.id == id } }
+    } else filteredNotes
+    val noteListState = rememberLazyListState()
+    var noteOrderChanged by remember { mutableStateOf(false) }
+    val noteReorderState = rememberReorderableLazyListState(noteListState) { from, to ->
+        // Search, filters and action buttons occupy the first three positions.
+        if (reorderEnabled && displayedNoteIds.isNotEmpty()) {
+            val fromIndex = (from.index - 3).coerceIn(displayedNoteIds.indices)
+            val toIndex = (to.index - 3).coerceIn(displayedNoteIds.indices)
+            if (fromIndex != toIndex) {
+                displayedNoteIds = displayedNoteIds.toMutableList().apply {
+                    add(toIndex, removeAt(fromIndex))
+                }
+                noteOrderChanged = true
+            }
+        }
+    }
+
+    LaunchedEffect(noteReorderState.isAnyItemDragging) {
+        if (!noteReorderState.isAnyItemDragging && noteOrderChanged) {
+            onReorderNotes(displayedNoteIds)
+            noteOrderChanged = false
         }
     }
 
     LazyColumn(
+        state = noteListState,
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(20.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // Search bar
         item {
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                placeholder = { Text("搜尋文法名稱、句型或關鍵字…") },
+                placeholder = { Text("搜尋文法或句型", maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 trailingIcon = {
                     if (searchQuery.isNotEmpty()) {
@@ -205,6 +247,7 @@ fun GrammarNotesScreen(
                     }
                 },
                 singleLine = true,
+                shape = RoundedCornerShape(28.dp),
                 modifier = Modifier.fillMaxWidth()
             )
         }
@@ -223,15 +266,15 @@ fun GrammarNotesScreen(
                         courses.forEach { course -> DropdownMenuItem(text = { Text(course) }, onClick = { selectedCourse = course; courseMenu = false }) }
                     }
                 }
-                ExposedDropdownMenuBox(expanded = categoryMenu, onExpandedChange = { categoryMenu = it }, modifier = Modifier.weight(1f)) {
+                ExposedDropdownMenuBox(expanded = typeMenu, onExpandedChange = { typeMenu = it }, modifier = Modifier.weight(1f)) {
                     OutlinedTextField(
-                        value = selectedCategory ?: "全部分類", onValueChange = {}, readOnly = true,
-                        label = { Text("分類") }, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(categoryMenu) },
+                        value = selectedType ?: "全部類型", onValueChange = {}, readOnly = true,
+                        label = { Text("文法類型") }, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(typeMenu) },
                         singleLine = true, modifier = Modifier.menuAnchor().fillMaxWidth()
                     )
-                    ExposedDropdownMenu(expanded = categoryMenu, onDismissRequest = { categoryMenu = false }) {
-                        DropdownMenuItem(text = { Text("全部分類") }, onClick = { selectedCategory = null; categoryMenu = false })
-                        categories.forEach { category -> DropdownMenuItem(text = { Text(category) }, onClick = { selectedCategory = category; categoryMenu = false }) }
+                    ExposedDropdownMenu(expanded = typeMenu, onDismissRequest = { typeMenu = false }) {
+                        DropdownMenuItem(text = { Text("全部類型") }, onClick = { selectedType = null; typeMenu = false })
+                        grammarTypes.forEach { type -> DropdownMenuItem(text = { Text(type, maxLines = 1, overflow = TextOverflow.Ellipsis) }, onClick = { selectedType = type; typeMenu = false }) }
                     }
                 }
             }
@@ -242,15 +285,7 @@ fun GrammarNotesScreen(
             FilledTonalButton(onClick = onImport, modifier = Modifier.weight(1f)) { Icon(Icons.Default.DocumentScanner, null); Spacer(Modifier.width(6.dp)); Text("匯入") }
         } }
 
-        item {
-            Text(
-                "文法筆記 (${filteredNotes.size})",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
-        }
-
-        if (filteredNotes.isEmpty()) {
+        if (displayedNotes.isEmpty()) {
             item {
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))) {
                     Column(
@@ -265,8 +300,16 @@ fun GrammarNotesScreen(
                 }
             }
         } else {
-            items(filteredNotes, key = { it.id }) { note ->
-                GrammarNoteCard(note = note, now = now, onOpen = onOpen)
+            itemsIndexed(displayedNotes, key = { _, note -> note.id }) { _, note ->
+                ReorderableItem(state = noteReorderState, key = note.id) {
+                    GrammarNoteCard(
+                        note = note,
+                        now = now,
+                        onOpen = onOpen,
+                        showReorder = reorderEnabled,
+                        dragHandleModifier = Modifier.draggableHandle()
+                    )
+                }
             }
         }
     }
@@ -283,34 +326,34 @@ fun GrammarStudyHubScreen(
 ) {
     val now = System.currentTimeMillis()
     val courses = remember(notes) { notes.map { it.course }.filter(String::isNotBlank).distinct() }
-    val categories = remember(notes) { notes.map { it.category }.filter(String::isNotBlank).distinct() }
+    val grammarTypes = remember(notes) { notes.map { it.title }.filter(String::isNotBlank).distinct() }
     var selectedCourse by rememberSaveable { mutableStateOf<String?>(null) }
-    var selectedCategory by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedType by rememberSaveable { mutableStateOf<String?>(null) }
     var courseMenu by remember { mutableStateOf(false) }
-    var categoryMenu by remember { mutableStateOf(false) }
-    val filtered = remember(notes, selectedCourse, selectedCategory) { notes.filter {
-        (selectedCourse == null || it.course == selectedCourse) && (selectedCategory == null || it.category == selectedCategory)
+    var typeMenu by remember { mutableStateOf(false) }
+    val filtered = remember(notes, selectedCourse, selectedType) { notes.filter {
+        (selectedCourse == null || it.course == selectedCourse) && (selectedType == null || it.title == selectedType)
     } }
     val due = filtered.filter { it.nextReviewAt <= now }
     val nextNote = due.firstOrNull() ?: filtered.firstOrNull()
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(20.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 GrammarFilterMenu("課程", selectedCourse ?: "全部課程", courses, courseMenu, { courseMenu = it }, { selectedCourse = it }, Modifier.weight(1f))
-                GrammarFilterMenu("分類", selectedCategory ?: "全部分類", categories, categoryMenu, { categoryMenu = it }, { selectedCategory = it }, Modifier.weight(1f))
+                GrammarFilterMenu("文法類型", selectedType ?: "全部類型", grammarTypes, typeMenu, { typeMenu = it }, { selectedType = it }, Modifier.weight(1f))
             }
         }
         item {
             Card(
-                shape = RoundedCornerShape(22.dp),
+                shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
             ) {
-                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Style, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                         Spacer(Modifier.width(8.dp))
@@ -370,10 +413,23 @@ fun GrammarStudyHubScreen(
 }
 
 @Composable
-private fun GrammarNoteCard(note: GrammarNote, now: Long, onOpen: (GrammarNote) -> Unit) {
+private fun GrammarNoteCard(
+    note: GrammarNote,
+    now: Long,
+    onOpen: (GrammarNote) -> Unit,
+    showReorder: Boolean = false,
+    dragHandleModifier: Modifier = Modifier
+) {
     Card(onClick = { onOpen(note) }, shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            GrammarNoteCardBody(note = note, now = now)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) { GrammarNoteCardBody(note = note, now = now) }
+                if (showReorder) {
+                    IconButton(onClick = {}, modifier = dragHandleModifier.size(40.dp)) {
+                        Icon(Icons.Default.DragHandle, contentDescription = "拖曳調整文法順序")
+                    }
+                }
+            }
         }
     }
 }
@@ -443,6 +499,7 @@ fun GrammarEditorScreen(note: GrammarNote?, questions: List<GrammarQuestion>, pa
         options = q.options, explanation = q.explanation, difficulty = q.difficulty, sourceType = q.sourceType
     ) }); if (isEmpty() && note?.questionTemplate?.isNotBlank() == true) add(GrammarQuestionDraft(prompt = note.questionTemplate, translation = note.exampleTranslation, answer = note.answer, acceptedAnswers = note.acceptedAnswers, options = note.options, explanation = note.explanation)) } }
     var aiPrompt by rememberSaveable { mutableStateOf("") }; var showAiDialog by remember { mutableStateOf(initialShowAiDialog) }; var busy by remember { mutableStateOf(false) }; var aiApplied by rememberSaveable(note?.id) { mutableStateOf(false) }; var error by remember { mutableStateOf<String?>(null) }; var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
+    var editorSection by rememberSaveable(note?.id) { mutableIntStateOf(0) }
     fun applyDraft(d: GrammarDraft) { aiApplied = true; title=d.title; category=d.category; level=d.level; summary=d.summary; structure=d.structure; usage=d.usage; example=d.exampleSentence; translation=d.exampleTranslation; mistakes=d.commonMistakes; comparison=d.comparison; tags=d.tags; patternDrafts.clear(); patternDrafts.addAll(d.patterns.ifEmpty { if (d.structure.isBlank()) emptyList() else listOf(GrammarPatternDraft("主要句型", d.structure, d.summary, d.usage, examples = if (d.exampleSentence.isBlank()) emptyList() else listOf(GrammarExampleDraft(d.exampleSentence, d.exampleTranslation)))) }); drafts.clear(); drafts.addAll(d.questions.ifEmpty { if (d.questionTemplate.isBlank()) emptyList() else listOf(GrammarQuestionDraft(prompt=d.questionTemplate, translation=d.exampleTranslation, answer=d.answer, acceptedAnswers=d.acceptedAnswers, options=d.options, explanation=d.explanation, sourceType="AI")) }) }
     fun importImages(uris: List<Uri>) { if (uris.isEmpty()) return; scope.launch { busy=true; error=null; runCatching { onScanImages(uris) }.onSuccess(::applyDraft).onFailure { error=it.message ?: "辨識失敗" }; busy=false } }
     val gallery = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { importImages(it) }
@@ -452,22 +509,96 @@ fun GrammarEditorScreen(note: GrammarNote?, questions: List<GrammarQuestion>, pa
     fun launchScanner() { val activity=context.findActivity() ?: return; val o=GmsDocumentScannerOptions.Builder().setGalleryImportAllowed(true).setPageLimit(10).setResultFormats(GmsDocumentScannerOptions.RESULT_FORMAT_JPEG).setScannerMode(GmsDocumentScannerOptions.SCANNER_MODE_FULL).build(); GmsDocumentScanning.getClient(o).getStartScanIntent(activity).addOnSuccessListener { scanner.launch(IntentSenderRequest.Builder(it).build()) }.addOnFailureListener { error=it.message ?: "無法開啟掃描器" } }
     if (showAiDialog) AlertDialog(onDismissRequest={if(!busy)showAiDialog=false},title={Text("AI 建立文法筆記")},text={Column(verticalArrangement=Arrangement.spacedBy(10.dp)){Text("AI 會產生筆記與多組獨立題目，儲存前都能修改。");OutlinedTextField(aiPrompt,{aiPrompt=it},label={Text("文法與程度")},minLines=3);error?.let{Text(it,color=MaterialTheme.colorScheme.error)}}},confirmButton={Button(enabled=aiPrompt.isNotBlank()&&!busy,onClick={scope.launch{busy=true;error=null;runCatching{onGenerateAi(aiPrompt)}.onSuccess{applyDraft(it);showAiDialog=false}.onFailure{error=it.message?:"AI 產生失敗"};busy=false}}){Text(if(busy)"產生中…" else "產生預覽")}},dismissButton={TextButton(enabled=!busy,onClick={showAiDialog=false}){Text("取消")}})
     Scaffold(topBar={TopAppBar(title={Text(if(note==null)"新增文法" else "編輯文法")},navigationIcon={IconButton(onClick=onBack){Icon(Icons.AutoMirrored.Filled.ArrowBack,"返回")}},actions={IconButton(onClick={showAiDialog=true}){Icon(Icons.Default.AutoAwesome,"AI 建立")}})},bottomBar={Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(12.dp),horizontalArrangement=Arrangement.spacedBy(10.dp)){OutlinedButton(onClick=onBack,modifier=Modifier.weight(1f)){Text("取消")};Button(enabled=title.isNotBlank()&&!busy,onClick={val q=drafts.firstOrNull();val firstPattern=patternDrafts.firstOrNull();val firstExample=firstPattern?.examples?.firstOrNull();onSave((note?:GrammarNote(title=title)).copy(course=course.trim().ifBlank{"通用"},title=title.trim(),category=category,level=level,summary=summary,structure=firstPattern?.formula.orEmpty(),usage=firstPattern?.usage.orEmpty(),exampleSentence=firstExample?.sentence.orEmpty(),exampleTranslation=firstExample?.translation.orEmpty(),commonMistakes=mistakes,comparison=comparison,tags=tags,sourceType=if(note==null&&aiApplied)"AI" else note?.sourceType?:"MANUAL",questionTemplate=q?.prompt.orEmpty(),answer=q?.answer.orEmpty(),acceptedAnswers=q?.acceptedAnswers.orEmpty(),options=q?.options.orEmpty(),explanation=q?.explanation.orEmpty()),drafts.toList(),patternDrafts.toList())},modifier=Modifier.weight(1f)){Text("儲存")}}}) { p ->
-        Column(Modifier.padding(p).verticalScroll(rememberScrollState()).padding(18.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
-            Text("從圖片直接建立",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold);Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){OutlinedButton(enabled=!busy,onClick=::launchCamera,modifier=Modifier.weight(1f)){Icon(Icons.Default.CameraAlt,null);Spacer(Modifier.width(4.dp));Text("拍照")};OutlinedButton(enabled=!busy,onClick=::launchScanner,modifier=Modifier.weight(1f)){Icon(Icons.Default.DocumentScanner,null);Spacer(Modifier.width(4.dp));Text("掃描")};OutlinedButton(enabled=!busy,onClick={gallery.launch("image/*")},modifier=Modifier.weight(1f)){Icon(Icons.Default.PhotoLibrary,null);Spacer(Modifier.width(4.dp));Text("圖片")}}
-            if(busy)Row(verticalAlignment=Alignment.CenterVertically){CircularProgressIndicator(Modifier.size(22.dp));Spacer(Modifier.width(10.dp));Text("AI 正在辨識並整理文法…")};error?.let{Text(it,color=MaterialTheme.colorScheme.error)}
-            ExposedDropdownMenuBox(expanded=courseMenu,onExpandedChange={courseMenu=it}){OutlinedTextField(value=course.ifBlank{"通用"},onValueChange={},readOnly=true,label={Text("課程（與單字區共用）")},trailingIcon={ExposedDropdownMenuDefaults.TrailingIcon(courseMenu)},singleLine=true,modifier=Modifier.menuAnchor().fillMaxWidth());ExposedDropdownMenu(expanded=courseMenu,onDismissRequest={courseMenu=false}){linkedCourses.forEach{linkedCourse->DropdownMenuItem(text={Text(linkedCourse)},onClick={course=linkedCourse;courseMenu=false})}}};OutlinedTextField(title,{title=it},label={Text("文法類型名稱 *")},singleLine=true,modifier=Modifier.fillMaxWidth());Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){OutlinedTextField(category,{category=it},label={Text("文法分類")},singleLine=true,modifier=Modifier.weight(1f));OutlinedTextField(level,{level=it},label={Text("程度")},singleLine=true,modifier=Modifier.weight(1f))};OutlinedTextField(summary,{summary=it},label={Text("核心概念")},minLines=2,modifier=Modifier.fillMaxWidth())
-            Row(verticalAlignment=Alignment.CenterVertically){Text("句型與例句",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold,modifier=Modifier.weight(1f));IconButton(onClick={patternDrafts.add(GrammarPatternDraft(title="句型 ${patternDrafts.size+1}"))}){Icon(Icons.Default.AddCircle,"新增句型")}}
-            patternDrafts.forEachIndexed { index, pattern -> GrammarPatternEditor(index, pattern, { patternDrafts[index]=it }, { patternDrafts.removeAt(index) }) }
-            if(patternDrafts.isEmpty()) OutlinedButton(onClick={patternDrafts.add(GrammarPatternDraft(title="主要句型"))},modifier=Modifier.fillMaxWidth()){Icon(Icons.Default.Add,null);Spacer(Modifier.width(6.dp));Text("新增第一組句型")}
-            OutlinedTextField(mistakes,{mistakes=it},label={Text("常見錯誤")},minLines=2,modifier=Modifier.fillMaxWidth());OutlinedTextField(comparison,{comparison=it},label={Text("容易混淆的文法")},minLines=2,modifier=Modifier.fillMaxWidth());OutlinedTextField(tags,{tags=it},label={Text("標籤（逗號分隔）")},singleLine=true,modifier=Modifier.fillMaxWidth())
-            Row(verticalAlignment=Alignment.CenterVertically){Column(Modifier.weight(1f)){Text("獨立練習題",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold);Text("每篇可建立多題；用 {{answer}} 標記挖空。",color=MaterialTheme.colorScheme.onSurfaceVariant)};IconButton(onClick={drafts.add(GrammarQuestionDraft())}){Icon(Icons.Default.AddCircle,"新增題目")}}
-            drafts.forEachIndexed{i,d->GrammarQuestionEditor(i,d,patternDrafts,{drafts[i]=it},{drafts.removeAt(i)})};if(drafts.isEmpty())OutlinedButton(onClick={drafts.add(GrammarQuestionDraft())},modifier=Modifier.fillMaxWidth()){Icon(Icons.Default.Add,null);Spacer(Modifier.width(6.dp));Text("新增第一題")};Spacer(Modifier.height(72.dp))
+        Column(Modifier.padding(p).verticalScroll(rememberScrollState()).padding(horizontal=16.dp,vertical=8.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
+            TabRow(selectedTabIndex=editorSection,containerColor=MaterialTheme.colorScheme.surface.copy(alpha=0.92f),divider={}){
+                listOf("基本","句型","題目","補充").forEachIndexed{index,label->Tab(selected=editorSection==index,onClick={editorSection=index},text={Text(label,maxLines=1)})}
+            }
+            when(editorSection){
+                0->{
+                    Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){OutlinedButton(enabled=!busy,onClick=::launchCamera,modifier=Modifier.weight(1f)){Icon(Icons.Default.CameraAlt,null);Spacer(Modifier.width(4.dp));Text("拍照")};OutlinedButton(enabled=!busy,onClick=::launchScanner,modifier=Modifier.weight(1f)){Icon(Icons.Default.DocumentScanner,null);Spacer(Modifier.width(4.dp));Text("掃描")};OutlinedButton(enabled=!busy,onClick={gallery.launch("image/*")},modifier=Modifier.weight(1f)){Icon(Icons.Default.PhotoLibrary,null);Spacer(Modifier.width(4.dp));Text("圖片")}}
+                    if(busy)Card(colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.primaryContainer)){Row(Modifier.fillMaxWidth().padding(14.dp),verticalAlignment=Alignment.CenterVertically){CircularProgressIndicator(Modifier.size(22.dp));Spacer(Modifier.width(10.dp));Text("AI 正在辨識並整理文法…")}}
+                    error?.let{Text(it,color=MaterialTheme.colorScheme.error)}
+                    ExposedDropdownMenuBox(expanded=courseMenu,onExpandedChange={courseMenu=it}){OutlinedTextField(value=course.ifBlank{"通用"},onValueChange={},readOnly=true,label={Text("課程（與單字區共用）")},trailingIcon={ExposedDropdownMenuDefaults.TrailingIcon(courseMenu)},singleLine=true,modifier=Modifier.menuAnchor().fillMaxWidth());ExposedDropdownMenu(expanded=courseMenu,onDismissRequest={courseMenu=false}){linkedCourses.forEach{linkedCourse->DropdownMenuItem(text={Text(linkedCourse,maxLines=1,overflow=TextOverflow.Ellipsis)},onClick={course=linkedCourse;courseMenu=false})}}}
+                    OutlinedTextField(title,{title=it},label={Text("文法類型名稱 *")},singleLine=true,modifier=Modifier.fillMaxWidth())
+                    Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){OutlinedTextField(category,{category=it},label={Text("分類")},singleLine=true,modifier=Modifier.weight(1f));OutlinedTextField(level,{level=it},label={Text("程度")},singleLine=true,modifier=Modifier.weight(1f))}
+                    OutlinedTextField(summary,{summary=it},label={Text("核心概念")},minLines=3,modifier=Modifier.fillMaxWidth())
+                    OutlinedTextField(tags,{tags=it},label={Text("標籤（逗號分隔）")},singleLine=true,modifier=Modifier.fillMaxWidth())
+                }
+                1->{
+                    Row(verticalAlignment=Alignment.CenterVertically){Text("句型與例句",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold,modifier=Modifier.weight(1f));IconButton(onClick={patternDrafts.add(GrammarPatternDraft(title="句型 ${patternDrafts.size+1}"))}){Icon(Icons.Default.AddCircle,"新增句型")}}
+                    patternDrafts.forEachIndexed { index, pattern -> GrammarPatternEditor(index, pattern, { patternDrafts[index]=it }, { patternDrafts.removeAt(index) }) }
+                    if(patternDrafts.isEmpty()) OutlinedButton(onClick={patternDrafts.add(GrammarPatternDraft(title="主要句型"))},modifier=Modifier.fillMaxWidth()){Icon(Icons.Default.Add,null);Spacer(Modifier.width(6.dp));Text("新增第一組句型")}
+                }
+                2->{
+                    Row(verticalAlignment=Alignment.CenterVertically){Column(Modifier.weight(1f)){Text("練習題",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold);Text("每題可連結到一組句型。",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)};IconButton(onClick={drafts.add(GrammarQuestionDraft())}){Icon(Icons.Default.AddCircle,"新增題目")}}
+                    drafts.forEachIndexed{i,d->GrammarQuestionEditor(i,d,patternDrafts,{drafts[i]=it},{drafts.removeAt(i)})}
+                    if(drafts.isEmpty())OutlinedButton(onClick={drafts.add(GrammarQuestionDraft())},modifier=Modifier.fillMaxWidth()){Icon(Icons.Default.Add,null);Spacer(Modifier.width(6.dp));Text("新增第一題")}
+                }
+                else->{
+                    OutlinedTextField(mistakes,{mistakes=it},label={Text("常見錯誤")},minLines=4,modifier=Modifier.fillMaxWidth())
+                    OutlinedTextField(comparison,{comparison=it},label={Text("容易混淆的文法")},minLines=4,modifier=Modifier.fillMaxWidth())
+                }
+            }
+            Spacer(Modifier.height(72.dp))
         }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Composable private fun GrammarQuestionEditor(index:Int,value:GrammarQuestionDraft,patterns:List<GrammarPatternDraft>,onChange:(GrammarQuestionDraft)->Unit,onDelete:()->Unit){var menu by remember{mutableStateOf(false)};Card(colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surfaceVariant.copy(alpha=0.5f))){Column(Modifier.padding(14.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){Row(verticalAlignment=Alignment.CenterVertically){Text("第 ${index+1} 題",fontWeight=FontWeight.Bold,modifier=Modifier.weight(1f));IconButton(onClick=onDelete){Icon(Icons.Default.DeleteOutline,"刪除這題")}};if(patterns.isNotEmpty())ExposedDropdownMenuBox(expanded=menu,onExpandedChange={menu=it}){OutlinedTextField(value=patterns.getOrNull(value.grammarPatternIndex)?.title?:"整篇文法",onValueChange={},readOnly=true,label={Text("對應句型")},trailingIcon={ExposedDropdownMenuDefaults.TrailingIcon(menu)},modifier=Modifier.menuAnchor().fillMaxWidth());ExposedDropdownMenu(expanded=menu,onDismissRequest={menu=false}){DropdownMenuItem(text={Text("整篇文法")},onClick={onChange(value.copy(grammarPatternIndex=-1));menu=false});patterns.forEachIndexed{i,p->DropdownMenuItem(text={Text(p.title.ifBlank{"句型 ${i+1}"})},onClick={onChange(value.copy(grammarPatternIndex=i));menu=false})}}};OutlinedTextField(value.prompt,{onChange(value.copy(prompt=it))},label={Text("題目句型")},supportingText={Text("例：She {{answer}} here yesterday.")},modifier=Modifier.fillMaxWidth());OutlinedTextField(value.translation,{onChange(value.copy(translation=it))},label={Text("中文提示")},modifier=Modifier.fillMaxWidth());OutlinedTextField(value.answer,{onChange(value.copy(answer=it))},label={Text("正確答案")},singleLine=true,modifier=Modifier.fillMaxWidth());OutlinedTextField(value.acceptedAnswers,{onChange(value.copy(acceptedAnswers=it))},label={Text("其他可接受答案（逗號分隔）")},singleLine=true,modifier=Modifier.fillMaxWidth());OutlinedTextField(value.options,{onChange(value.copy(options=it))},label={Text("選項（留空即為填空題")},singleLine=true,modifier=Modifier.fillMaxWidth());OutlinedTextField(value.explanation,{onChange(value.copy(explanation=it))},label={Text("答案說明")},modifier=Modifier.fillMaxWidth())}}}
+@Composable
+private fun GrammarQuestionEditor(
+    index: Int,
+    value: GrammarQuestionDraft,
+    patterns: List<GrammarPatternDraft>,
+    onChange: (GrammarQuestionDraft) -> Unit,
+    onDelete: () -> Unit
+) {
+    var menu by remember { mutableStateOf(false) }
+    var expanded by rememberSaveable(index) { mutableStateOf(index == 0) }
+    Card(
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+    ) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("第 ${index + 1} 題 · ${if (value.options.isBlank()) "填空" else "選擇"}", fontWeight = FontWeight.Bold)
+                    Text(
+                        value.prompt.ifBlank { "尚未輸入題目" },
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                IconButton(onClick = { expanded = !expanded }) { Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, if (expanded) "收起" else "展開") }
+                IconButton(onClick = onDelete) { Icon(Icons.Default.DeleteOutline, "刪除這題") }
+            }
+            if (expanded) {
+                if (patterns.isNotEmpty()) ExposedDropdownMenuBox(expanded = menu, onExpandedChange = { menu = it }) {
+                    OutlinedTextField(
+                        value = patterns.getOrNull(value.grammarPatternIndex)?.title ?: "整篇文法",
+                        onValueChange = {}, readOnly = true, label = { Text("對應句型") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(menu) },
+                        singleLine = true, modifier = Modifier.menuAnchor().fillMaxWidth()
+                    )
+                    ExposedDropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                        DropdownMenuItem(text = { Text("整篇文法") }, onClick = { onChange(value.copy(grammarPatternIndex = -1)); menu = false })
+                        patterns.forEachIndexed { i, pattern ->
+                            DropdownMenuItem(text = { Text(pattern.title.ifBlank { "句型 ${i + 1}" }, maxLines = 1, overflow = TextOverflow.Ellipsis) }, onClick = { onChange(value.copy(grammarPatternIndex = i)); menu = false })
+                        }
+                    }
+                }
+                OutlinedTextField(value.prompt, { onChange(value.copy(prompt = it)) }, label = { Text("題目句型") }, supportingText = { Text("例：She {{answer}} here yesterday.") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value.translation, { onChange(value.copy(translation = it)) }, label = { Text("中文提示") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value.answer, { onChange(value.copy(answer = it)) }, label = { Text("正確答案") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value.acceptedAnswers, { onChange(value.copy(acceptedAnswers = it)) }, label = { Text("其他可接受答案（逗號分隔）") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value.options, { onChange(value.copy(options = it)) }, label = { Text("選項（留空即為填空題）") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value.explanation, { onChange(value.copy(explanation = it)) }, label = { Text("答案說明") }, modifier = Modifier.fillMaxWidth())
+            }
+        }
+    }
+}
 
 @Composable
 private fun GrammarPatternEditor(
@@ -476,30 +607,37 @@ private fun GrammarPatternEditor(
     onChange: (GrammarPatternDraft) -> Unit,
     onDelete: () -> Unit
 ) {
+    var expanded by rememberSaveable(index) { mutableStateOf(index == 0) }
     Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("句型 ${index + 1}", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Column(Modifier.weight(1f)) {
+                    Text(value.title.ifBlank { "句型 ${index + 1}" }, fontWeight = FontWeight.Bold)
+                    Text("${value.examples.size} 個例句", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                IconButton(onClick = { expanded = !expanded }) { Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore, if (expanded) "收起" else "展開") }
                 IconButton(onClick = onDelete) { Icon(Icons.Default.DeleteOutline, "刪除句型") }
             }
-            OutlinedTextField(value.title, { onChange(value.copy(title = it)) }, label = { Text("句型名稱") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(value.formula, { onChange(value.copy(formula = it)) }, label = { Text("公式") }, minLines = 2, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(value.meaning, { onChange(value.copy(meaning = it)) }, label = { Text("意思") }, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(value.usage, { onChange(value.copy(usage = it)) }, label = { Text("使用時機") }, minLines = 2, modifier = Modifier.fillMaxWidth())
-            value.examples.forEachIndexed { exampleIndex, example ->
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                    Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("例句 ${exampleIndex + 1}", style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
-                            IconButton(onClick = { onChange(value.copy(examples = value.examples.toMutableList().also { it.removeAt(exampleIndex) })) }) { Icon(Icons.Default.Close, "刪除例句") }
+            if (expanded) {
+                OutlinedTextField(value.title, { onChange(value.copy(title = it)) }, label = { Text("句型名稱") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value.formula, { onChange(value.copy(formula = it)) }, label = { Text("公式") }, minLines = 2, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value.meaning, { onChange(value.copy(meaning = it)) }, label = { Text("意思") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value.usage, { onChange(value.copy(usage = it)) }, label = { Text("使用時機") }, minLines = 2, modifier = Modifier.fillMaxWidth())
+                value.examples.forEachIndexed { exampleIndex, example ->
+                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f))) {
+                        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("例句 ${exampleIndex + 1}", style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
+                                IconButton(onClick = { onChange(value.copy(examples = value.examples.toMutableList().also { it.removeAt(exampleIndex) })) }) { Icon(Icons.Default.Close, "刪除例句") }
+                            }
+                            OutlinedTextField(example.sentence, { sentence -> onChange(value.copy(examples = value.examples.toMutableList().also { it[exampleIndex] = example.copy(sentence = sentence) })) }, label = { Text("英文") }, modifier = Modifier.fillMaxWidth())
+                            OutlinedTextField(example.translation, { translation -> onChange(value.copy(examples = value.examples.toMutableList().also { it[exampleIndex] = example.copy(translation = translation) })) }, label = { Text("中文") }, modifier = Modifier.fillMaxWidth())
                         }
-                        OutlinedTextField(example.sentence, { sentence -> onChange(value.copy(examples = value.examples.toMutableList().also { it[exampleIndex] = example.copy(sentence = sentence) })) }, label = { Text("英文") }, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(example.translation, { translation -> onChange(value.copy(examples = value.examples.toMutableList().also { it[exampleIndex] = example.copy(translation = translation) })) }, label = { Text("中文") }, modifier = Modifier.fillMaxWidth())
                     }
                 }
-            }
-            TextButton(onClick = { onChange(value.copy(examples = value.examples + GrammarExampleDraft())) }) {
-                Icon(Icons.Default.Add, null); Spacer(Modifier.width(4.dp)); Text("新增例句")
+                TextButton(onClick = { onChange(value.copy(examples = value.examples + GrammarExampleDraft())) }) {
+                    Icon(Icons.Default.Add, null); Spacer(Modifier.width(4.dp)); Text("新增例句")
+                }
             }
         }
     }
@@ -552,11 +690,11 @@ fun GrammarLearnScreen(
             }
         } }
     ) { padding ->
-        Column(Modifier.padding(padding).padding(20.dp).fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(Modifier.padding(padding).padding(horizontal = 16.dp, vertical = 8.dp).fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             LinearProgressIndicator(progress = { (step + 1f) / pages.size.coerceAtLeast(1) }, modifier = Modifier.fillMaxWidth())
             Text(page.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)), modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(page.primary, style = if (page.title.startsWith("句型")) MaterialTheme.typography.titleLarge else MaterialTheme.typography.bodyLarge)
                     if (page.secondary.isNotBlank()) { HorizontalDivider(); Text(page.secondary, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 }
@@ -724,21 +862,21 @@ fun GrammarQuizHubScreen(
     modifier: Modifier = Modifier
 ) {
     val courses = remember(notes) { notes.map { it.course }.filter(String::isNotBlank).distinct() }
-    val categories = remember(notes) { notes.map { it.category }.filter(String::isNotBlank).distinct() }
+    val grammarTypes = remember(notes) { notes.map { it.title }.filter(String::isNotBlank).distinct() }
     var selectedCourse by rememberSaveable { mutableStateOf<String?>(null) }
-    var selectedCategory by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedType by rememberSaveable { mutableStateOf<String?>(null) }
     var courseMenu by remember { mutableStateOf(false) }
-    var categoryMenu by remember { mutableStateOf(false) }
-    val selectedNotes = notes.filter { (selectedCourse == null || it.course == selectedCourse) && (selectedCategory == null || it.category == selectedCategory) }
+    var typeMenu by remember { mutableStateOf(false) }
+    val selectedNotes = notes.filter { (selectedCourse == null || it.course == selectedCourse) && (selectedType == null || it.title == selectedType) }
     val selectedIds = selectedNotes.map { it.id }.toSet()
     val selectedQuestions = questions.filter { it.grammarNoteId in selectedIds }
     LazyColumn(
-        modifier = modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp),
+        modifier = modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item { Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             GrammarFilterMenu("課程", selectedCourse ?: "全部課程", courses, courseMenu, { courseMenu = it }, { selectedCourse = it }, Modifier.weight(1f))
-            GrammarFilterMenu("分類", selectedCategory ?: "全部分類", categories, categoryMenu, { categoryMenu = it }, { selectedCategory = it }, Modifier.weight(1f))
+            GrammarFilterMenu("文法類型", selectedType ?: "全部類型", grammarTypes, typeMenu, { typeMenu = it }, { selectedType = it }, Modifier.weight(1f))
         } }
         item {
             Button(
@@ -751,7 +889,7 @@ fun GrammarQuizHubScreen(
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))) {
                 Column(Modifier.fillMaxWidth().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("目前範圍還沒有測驗題", fontWeight = FontWeight.Bold)
-                    TextButton(onClick = { onGenerateAiTopicQuiz(selectedCategory ?: selectedCourse ?: "綜合文法") }) { Icon(Icons.Default.AutoAwesome, null); Spacer(Modifier.width(4.dp)); Text("AI 建立題目") }
+                    TextButton(onClick = { onGenerateAiTopicQuiz(selectedType ?: selectedCourse ?: "綜合文法") }) { Icon(Icons.Default.AutoAwesome, null); Spacer(Modifier.width(4.dp)); Text("AI 建立題目") }
                 }
             }
         }

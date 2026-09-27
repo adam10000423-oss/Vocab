@@ -555,15 +555,6 @@ fun ExternalImportScreen(
                                 style = MaterialTheme.typography.labelSmall
                             )
                         }
-                        FloatingActionButton(
-                            onClick = {
-                                scope.launch {
-                                    val last = (listState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0)
-                                    listState.animateScrollToItem(minOf(6, last))
-                                }
-                            },
-                            modifier = Modifier.size(42.dp)
-                        ) { Icon(Icons.Default.KeyboardArrowUp, "回到第一個單字") }
                         OutlinedButton(onClick = {
                             val shouldSelect = candidates.any { !it.selected }
                             candidates.indices.forEach { index ->
@@ -680,14 +671,25 @@ fun ExternalImportScreen(
                 }
             }
         }
-        if (candidates.isNotEmpty()) {
+        if (candidates.isNotEmpty() && listState.canScrollBackward) {
+            FloatingActionButton(
+                onClick = {
+                    scope.launch {
+                        val last = (listState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0)
+                        listState.animateScrollToItem(minOf(6, last))
+                    }
+                },
+                modifier = Modifier.align(Alignment.TopEnd).padding(8.dp).size(44.dp)
+            ) { Icon(Icons.Default.KeyboardArrowUp, "回到第一個單字") }
+        }
+        if (candidates.isNotEmpty() && listState.canScrollForward) {
             FloatingActionButton(
                 onClick = {
                     scope.launch {
                         listState.animateScrollToItem((listState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0))
                     }
                 },
-                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 12.dp)
+                modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp).size(44.dp)
             ) { Icon(Icons.Default.KeyboardArrowDown, "前往最下面") }
         }
         }

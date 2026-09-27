@@ -37,12 +37,15 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
@@ -54,6 +57,7 @@ import com.example.data.entity.Deck
 import com.example.data.entity.Flashcard
 import com.example.ui.components.AddFolderDialog
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import org.json.JSONArray
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -80,6 +84,13 @@ fun WordLookupScreen(
     var showCreateFolder by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val keyboard = LocalSoftwareKeyboardController.current
+    val searchFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        delay(180)
+        searchFocusRequester.requestFocus()
+        keyboard?.show()
+    }
     val localMatches = remember(query, cards, searched) {
         if (!searched || query.isBlank()) emptyList() else cards.filter {
             it.word.contains(query.trim(), true) || it.definition.contains(query.trim(), true)
@@ -164,7 +175,10 @@ fun WordLookupScreen(
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                         keyboardActions = KeyboardActions(onSearch = { search() }),
-                        modifier = Modifier.fillMaxWidth()
+                        shape = RoundedCornerShape(28.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(searchFocusRequester)
                     )
                 }
             )
