@@ -7,6 +7,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.Box
@@ -24,6 +25,12 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.NavController
 import com.example.data.entity.Flashcard
+import com.example.data.entity.GrammarNote
+import com.example.data.entity.GrammarQuestion
+import com.example.data.entity.GrammarDraft
+import com.example.data.entity.GrammarQuizResult
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.unit.dp
 import com.example.ui.screens.AddEditCardScreen
 import com.example.ui.screens.CardListScreen
 import com.example.ui.screens.DashboardScreen
@@ -42,6 +49,19 @@ import com.example.ui.screens.VocabularyQualityScreen
 import com.example.ui.screens.WordLookupScreen
 import com.example.ui.screens.InteractiveReadingScreen
 import com.example.ui.screens.AiGenerationLoadingScreen
+import com.example.ui.screens.GrammarDashboardScreen
+import com.example.ui.screens.GrammarNotesScreen
+import com.example.ui.screens.GrammarStudyHubScreen
+import com.example.ui.screens.GrammarDetailScreen
+import com.example.ui.screens.GrammarEditorScreen
+import com.example.ui.screens.GrammarLearnScreen
+import com.example.ui.screens.GrammarQuizFlowScreen
+import com.example.ui.screens.GrammarQuizResultScreen
+import com.example.ui.screens.GrammarQuizHubScreen
+import com.example.ui.screens.GrammarImportScreen
+import com.example.ui.screens.GrammarImportPreviewScreen
+import com.example.ui.screens.GrammarNoteDetailScreen
+import com.example.ui.screens.GrammarWritingCheckScreen
 import com.example.viewmodel.VocabularyViewModel
 import com.example.util.GitHubUpdateManager
 import com.example.util.UpdateCheckResult
@@ -60,6 +80,14 @@ object Routes {
     const val QUALITY_CHECK = "quality_check"
     const val WORD_LOOKUP = "word_lookup"
     const val GENERATED_READING = "generated_reading"
+    const val GRAMMAR_EDITOR = "grammar_editor"
+    const val GRAMMAR_DETAIL = "grammar_detail"
+    const val GRAMMAR_LEARN = "grammar_learn"
+    const val GRAMMAR_QUIZ = "grammar_quiz"
+    const val GRAMMAR_WRITING_CHECK = "grammar_writing_check"
+    const val GRAMMAR_IMPORT = "grammar_import"
+    const val GRAMMAR_IMPORT_PREVIEW = "grammar_import_preview"
+    const val GRAMMAR_QUIZ_RESULT = "grammar_quiz_result"
 }
 
 @Composable
@@ -98,6 +126,11 @@ fun VocabApp(
     val assistantSelectedDeckIds by viewModel.assistantSelectedDeckIds.collectAsStateWithLifecycle()
     val pronunciationWeakCardIds by viewModel.pronunciationWeakCardIds.collectAsStateWithLifecycle()
     val studyCheckInDates by viewModel.studyCheckInDates.collectAsStateWithLifecycle()
+    val grammarNotes by viewModel.allGrammarNotes.collectAsStateWithLifecycle()
+    val grammarQuestions by viewModel.allGrammarQuestions.collectAsStateWithLifecycle()
+    val grammarPatterns by viewModel.allGrammarPatterns.collectAsStateWithLifecycle()
+    val grammarExamples by viewModel.allGrammarExamples.collectAsStateWithLifecycle()
+    val grammarWeaknesses by viewModel.grammarWeaknesses.collectAsStateWithLifecycle()
 
     var currentTab by remember { mutableIntStateOf(0) }
     var editingCard by remember { mutableStateOf<Flashcard?>(null) }
@@ -110,8 +143,29 @@ fun VocabApp(
     var updateAvailable by remember { mutableStateOf(false) }
     var readingStartedAt by remember { mutableStateOf(0L) }
     var auditStartedAt by remember { mutableStateOf(0L) }
+    val grammarMode = settings.grammarMode
+    var selectedGrammarId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var editingGrammar by remember { mutableStateOf<GrammarNote?>(null) }
+    var launchGrammarAi by remember { mutableStateOf(false) }
+    var grammarImportDrafts by remember { mutableStateOf<List<GrammarDraft>>(emptyList()) }
+    var grammarQuizResult by remember { mutableStateOf<GrammarQuizResult?>(null) }
+    var grammarQuizFilterIds by remember { mutableStateOf<Set<Long>?>(null) }
+    var showSwitchConfirmDialog by remember { mutableStateOf(false) }
+    var targetGrammarMode by remember { mutableStateOf(false) }
+    var customQuizTitle by remember { mutableStateOf("") }
+    var customQuizQuestions by remember { mutableStateOf<List<GrammarQuestion>?>(null) }
+    var generatingAiTopic by remember { mutableStateOf<String?>(null) }
     val updateCheckScope = rememberCoroutineScope()
     val appContext = LocalContext.current.applicationContext
+
+    fun performWorldSwitch(newMode: Boolean) {
+        viewModel.updateBooleanSetting("grammarMode", newMode)
+        currentTab = 0
+        quizGameActive = false
+        editingCard = null
+        editingGrammar = null
+        viewModel.stopSpeaking()
+    }
 
     LifecycleEventEffect(Lifecycle.Event.ON_START) {
         updateCheckScope.launch {
@@ -146,6 +200,7 @@ fun VocabApp(
     }
     LaunchedEffect(widgetAction) {
         if (widgetAction == com.example.MainActivity.WIDGET_ACTION_REVIEW) {
+            performWorldSwitch(false)
             viewModel.selectDeck(null)
             reviewDeckIds = null
             reviewScopeId = 0L
@@ -155,12 +210,52 @@ fun VocabApp(
     }
     LaunchedEffect(sharedText) {
         if (!sharedText.isNullOrBlank()) {
+            performWorldSwitch(false)
             pendingSharedText = sharedText
             editingCard = null
             navController.navigate(Routes.ADD_EDIT_CARD) { launchSingleTop = true }
             onSharedTextConsumed()
         }
     }
+
+    if (showSwitchConfirmDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showSwitchConfirmDialog = false },
+            title = { androidx.compose.material3.Text("切換產品世界？") },
+            text = { androidx.compose.material3.Text("您目前的編輯或測驗進度將會取消，確定要切換嗎？") },
+            confirmButton = {
+                androidx.compose.material3.Button(onClick = {
+                    showSwitchConfirmDialog = false
+                    performWorldSwitch(targetGrammarMode)
+                }) {
+                    androidx.compose.material3.Text("確定切換")
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { showSwitchConfirmDialog = false }) {
+                    androidx.compose.material3.Text("取消")
+                }
+            }
+        )
+    }
+
+    if (generatingAiTopic != null) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = {},
+            title = { androidx.compose.material3.Text("AI 正在生成特訓中…") },
+            text = {
+                androidx.compose.foundation.layout.Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    CircularProgressIndicator()
+                    androidx.compose.material3.Text("正在為【$generatingAiTopic】產生專業文法概念與特訓題目，請稍候")
+                }
+            },
+            confirmButton = {}
+        )
+    }
+
     NavHost(navController = navController, startDestination = Routes.MAIN) {
         composable(Routes.MAIN) {
             MainScreen(
@@ -170,16 +265,52 @@ fun VocabApp(
                     if (it != 3) quizGameActive = false
                     currentTab = it
                 },
-                showBottomNavigation = !quizGameActive,
+                showBottomNavigation = grammarMode || !quizGameActive,
                 onOpenSettings = { navController.navigate(Routes.SETTINGS) },
                 onOpenWordSearch = { navController.navigate(Routes.WORD_LOOKUP) },
+                grammarMode = grammarMode,
+                onToggleGrammarMode = {
+                    val nextMode = !grammarMode
+                    if (editingCard != null || editingGrammar != null || quizGameActive) {
+                        targetGrammarMode = nextMode
+                        showSwitchConfirmDialog = true
+                    } else {
+                        performWorldSwitch(nextMode)
+                    }
+                },
                 updateAvailable = updateAvailable,
                 onOpenAssistant = {
                     viewModel.openAssistant(null)
                     navController.navigate(Routes.AI_ASSISTANT) { launchSingleTop = true }
                 },
                 dashboardContent = {
-                    DashboardScreen(
+                    if (grammarMode) {
+                        GrammarDashboardScreen(
+                            notes = grammarNotes,
+                            weaknesses = grammarWeaknesses,
+                            onAdd = {
+                                editingGrammar = null
+                                launchGrammarAi = false
+                                navController.navigate(Routes.GRAMMAR_EDITOR)
+                            },
+                            onImport = { navController.navigate(Routes.GRAMMAR_IMPORT) },
+                            onOpen = { note ->
+                                selectedGrammarId = note.id
+                                navController.navigate(Routes.GRAMMAR_DETAIL)
+                            },
+                            onLearn = { note ->
+                                selectedGrammarId = note.id
+                                navController.navigate(Routes.GRAMMAR_LEARN)
+                            },
+                            onQuiz = { note ->
+                                selectedGrammarId = note.id
+                                grammarQuizFilterIds = null
+                                navController.navigate(Routes.GRAMMAR_QUIZ)
+                            },
+                            onWritingCheck = { currentTab = 3 },
+                            onSeeAllNotes = { currentTab = 1 }
+                        )
+                    } else DashboardScreen(
                         decks = decks,
                         allCards = allCards,
                         dueCards = dueCards,
@@ -239,7 +370,21 @@ fun VocabApp(
                     )
                 },
                 foldersContent = {
-                    FoldersManagementScreen(
+                    if (grammarMode) {
+                        GrammarNotesScreen(
+                            notes = grammarNotes,
+                            onAdd = {
+                                editingGrammar = null
+                                launchGrammarAi = false
+                                navController.navigate(Routes.GRAMMAR_EDITOR)
+                            },
+                            onImport = { navController.navigate(Routes.GRAMMAR_IMPORT) },
+                            onOpen = { note ->
+                                selectedGrammarId = note.id
+                                navController.navigate(Routes.GRAMMAR_DETAIL)
+                            }
+                        )
+                    } else FoldersManagementScreen(
                         decks = decks,
                         allCards = allCards,
                         onAddFolder = viewModel::addFolder,
@@ -273,7 +418,24 @@ fun VocabApp(
                     )
                 },
                 studyContent = {
-                    StudyHubScreen(
+                    if (grammarMode) {
+                        GrammarStudyHubScreen(
+                            notes = grammarNotes,
+                            onLearn = { note ->
+                                selectedGrammarId = note.id
+                                navController.navigate(Routes.GRAMMAR_LEARN)
+                            },
+                            onQuiz = { note ->
+                                selectedGrammarId = note.id
+                                grammarQuizFilterIds = null
+                                navController.navigate(Routes.GRAMMAR_QUIZ)
+                            },
+                            onOpen = { note ->
+                                selectedGrammarId = note.id
+                                navController.navigate(Routes.GRAMMAR_DETAIL)
+                            }
+                        )
+                    } else StudyHubScreen(
                         decks = decks,
                         allCards = allCards,
                         onStartReviewForDeck = { deckId ->
@@ -313,7 +475,54 @@ fun VocabApp(
                     )
                 },
                 quizContent = {
-                    QuizGamesScreen(
+                    if (grammarMode) {
+                        GrammarQuizHubScreen(
+                            notes = grammarNotes,
+                            questions = grammarQuestions,
+                            weaknesses = grammarWeaknesses,
+                            onStartTopicQuiz = { topic, topicQuestions ->
+                                customQuizTitle = "【$topic】文法特訓"
+                                customQuizQuestions = topicQuestions
+                                selectedGrammarId = topicQuestions.firstOrNull()?.grammarNoteId
+                                grammarQuizFilterIds = null
+                                navController.navigate(Routes.GRAMMAR_QUIZ)
+                            },
+                            onGenerateAiTopicQuiz = { topic ->
+                                generatingAiTopic = topic
+                                updateCheckScope.launch {
+                                    runCatching {
+                                        viewModel.generateGrammarDraft("請為【$topic】產生一篇包含核心語法與 6 題精選練習題的繁體中文文法筆記。課程填寫：$topic")
+                                    }.onSuccess { draft ->
+                                        viewModel.saveGrammarNoteBundle(
+                                            GrammarNote(
+                                                title = draft.title,
+                                                summary = draft.summary,
+                                                structure = draft.structure,
+                                                usage = draft.usage,
+                                                exampleSentence = draft.exampleSentence,
+                                                exampleTranslation = draft.exampleTranslation,
+                                                commonMistakes = draft.commonMistakes,
+                                                comparison = draft.comparison,
+                                                tags = draft.tags,
+                                                course = topic
+                                            ),
+                                            draft.questions,
+                                            draft.patterns
+                                        ) { id ->
+                                            generatingAiTopic = null
+                                            selectedGrammarId = id
+                                            navController.navigate(Routes.GRAMMAR_DETAIL)
+                                        }
+                                    }.onFailure {
+                                        generatingAiTopic = null
+                                    }
+                                }
+                            },
+                            onWritingCheck = viewModel::checkGrammarWriting,
+                            onAcceptWritingIssue = viewModel::acceptGrammarWritingIssue,
+                            onOpenWritingCheck = { navController.navigate(Routes.GRAMMAR_WRITING_CHECK) }
+                        )
+                    } else QuizGamesScreen(
                         cards = allCards,
                         decks = decks,
                         launchDeckIds = pendingQuizDeckIds,
@@ -670,6 +879,173 @@ fun VocabApp(
                 },
                 onBack = { navController.popBackStack() },
                 pdfPageLimit = settings.pdfPageLimit
+            )
+        }
+
+        composable(Routes.GRAMMAR_IMPORT) {
+            GrammarImportScreen(
+                onBack = { navController.popBackStack() },
+                onManual = {
+                    editingGrammar = null
+                    launchGrammarAi = false
+                    navController.navigate(Routes.GRAMMAR_EDITOR)
+                },
+                onAiCreate = {
+                    editingGrammar = null
+                    launchGrammarAi = true
+                    navController.navigate(Routes.GRAMMAR_EDITOR)
+                },
+                onRecognize = viewModel::generateGrammarDraftsFromSources,
+                onRecognizeText = viewModel::generateGrammarDraftFromText,
+                onImportShare = viewModel::readGrammarShare,
+                onPreview = { drafts ->
+                    grammarImportDrafts = drafts
+                    navController.navigate(Routes.GRAMMAR_IMPORT_PREVIEW)
+                }
+            )
+        }
+
+        composable(Routes.GRAMMAR_IMPORT_PREVIEW) {
+            GrammarImportPreviewScreen(
+                initialDrafts = grammarImportDrafts,
+                courses = (listOf("通用") + decks.map { it.category })
+                    .filter(String::isNotBlank).distinct(),
+                onBack = { navController.popBackStack() },
+                onSave = { drafts, course, duplicateMode ->
+                    viewModel.saveGrammarDrafts(drafts, course, duplicateMode) { ids ->
+                        grammarImportDrafts = emptyList()
+                        selectedGrammarId = ids.firstOrNull()
+                        if (selectedGrammarId != null) navController.navigate(Routes.GRAMMAR_DETAIL) {
+                            popUpTo(Routes.GRAMMAR_IMPORT) { inclusive = true }
+                        } else navController.popBackStack(Routes.MAIN, false)
+                    }
+                }
+            )
+        }
+
+        composable(Routes.GRAMMAR_EDITOR) {
+            val editingQuestions = grammarQuestions.filter { it.grammarNoteId == editingGrammar?.id }
+            GrammarEditorScreen(
+                note = editingGrammar,
+                questions = editingQuestions,
+                patterns = grammarPatterns.filter { it.grammarNoteId == editingGrammar?.id },
+                examples = grammarExamples.filter { it.grammarNoteId == editingGrammar?.id },
+                courses = decks.map { it.category }.filter(String::isNotBlank).distinct(),
+                initialShowAiDialog = launchGrammarAi,
+                onGenerateAi = viewModel::generateGrammarDraft,
+                onScanImages = viewModel::generateGrammarDraftFromImages,
+                onSave = { note, questions, patterns ->
+                    viewModel.saveGrammarNoteBundle(note, questions, patterns) { id ->
+                        selectedGrammarId = id
+                        navController.navigate(Routes.GRAMMAR_DETAIL) {
+                            popUpTo(Routes.GRAMMAR_EDITOR) { inclusive = true }
+                        }
+                        launchGrammarAi = false
+                    }
+                },
+                onBack = { launchGrammarAi = false; navController.popBackStack() }
+            )
+        }
+
+        composable(Routes.GRAMMAR_DETAIL) {
+            val note = grammarNotes.firstOrNull { it.id == selectedGrammarId }
+            if (note == null) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            } else GrammarNoteDetailScreen(
+                note = note,
+                patterns = grammarPatterns.filter { it.grammarNoteId == note.id },
+                examples = grammarExamples.filter { it.grammarNoteId == note.id },
+                questionCount = grammarQuestions.count { it.grammarNoteId == note.id },
+                onBack = { navController.popBackStack() },
+                onEdit = {
+                    editingGrammar = note
+                    launchGrammarAi = false
+                    navController.navigate(Routes.GRAMMAR_EDITOR)
+                },
+                onDelete = {
+                    viewModel.deleteGrammarNote(note) {
+                        selectedGrammarId = null
+                        navController.popBackStack()
+                    }
+                },
+                onFavorite = { viewModel.toggleGrammarFavorite(note) },
+                onSpeak = viewModel::speakText,
+                onLearn = { navController.navigate(Routes.GRAMMAR_LEARN) },
+                onQuiz = { grammarQuizFilterIds = null; navController.navigate(Routes.GRAMMAR_QUIZ) }
+            )
+        }
+
+        composable(Routes.GRAMMAR_LEARN) {
+            val note = grammarNotes.firstOrNull { it.id == selectedGrammarId }
+            if (note == null) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            } else GrammarLearnScreen(
+                note = note,
+                patterns = grammarPatterns.filter { it.grammarNoteId == note.id },
+                examples = grammarExamples.filter { it.grammarNoteId == note.id },
+                onProgress = { viewModel.updateGrammarStudyStep(note, it) },
+                onRatePattern = viewModel::recordGrammarPatternResult,
+                onBack = { navController.popBackStack() },
+                onQuiz = { grammarQuizFilterIds = null; navController.navigate(Routes.GRAMMAR_QUIZ) }
+            )
+        }
+
+        composable(Routes.GRAMMAR_QUIZ) {
+            val note = grammarNotes.firstOrNull { it.id == selectedGrammarId }
+            val quizQuestions = customQuizQuestions
+                ?: grammarQuestions.filter { it.grammarNoteId == note?.id }
+                    .filter { grammarQuizFilterIds == null || it.id in grammarQuizFilterIds.orEmpty() }
+            if (quizQuestions.isEmpty() && note == null) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            } else GrammarQuizFlowScreen(
+                noteId = note?.id ?: 0L,
+                noteTitle = if (customQuizTitle.isNotBlank()) customQuizTitle else note?.title.orEmpty(),
+                masteryBefore = note?.masteryPercent ?: 0,
+                questions = quizQuestions,
+                onAnswer = { question, correct, hint ->
+                    grammarNotes.firstOrNull { it.id == question.grammarNoteId }?.let { viewModel.recordGrammarAnswer(it, correct, hint) }
+                    viewModel.recordGrammarPatternResult(question.grammarPatternId, correct, hint)
+                },
+                onBack = { customQuizQuestions = null; customQuizTitle = ""; navController.popBackStack() },
+                onComplete = { result ->
+                    grammarQuizResult = result
+                    navController.navigate(Routes.GRAMMAR_QUIZ_RESULT) {
+                        popUpTo(Routes.GRAMMAR_QUIZ) { inclusive = true }
+                    }
+                }
+            )
+        }
+
+        composable(Routes.GRAMMAR_QUIZ_RESULT) {
+            val result = grammarQuizResult
+            val note = grammarNotes.firstOrNull { it.id == result?.grammarNoteId }
+            val title = if (customQuizTitle.isNotBlank()) customQuizTitle else note?.title.orEmpty()
+            val questions = customQuizQuestions
+                ?: (if (note != null) grammarQuestions.filter { it.grammarNoteId == note.id } else emptyList())
+            if (result == null) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            else GrammarQuizResultScreen(
+                noteTitle = title.ifBlank { "文法測驗" },
+                result = result,
+                questions = questions,
+                onBack = { customQuizQuestions = null; customQuizTitle = ""; grammarQuizFilterIds = null; navController.popBackStack() },
+                onPracticeWrong = {
+                    grammarQuizFilterIds = result.wrongQuestionIds.toSet()
+                    navController.navigate(Routes.GRAMMAR_QUIZ)
+                },
+                onRetryAll = {
+                    grammarQuizFilterIds = null
+                    navController.navigate(Routes.GRAMMAR_QUIZ)
+                }
+            )
+        }
+
+        composable(Routes.GRAMMAR_WRITING_CHECK) {
+            GrammarWritingCheckScreen(
+                weaknesses = grammarWeaknesses,
+                onCheck = viewModel::checkGrammarWriting,
+                onRecognizeSources = viewModel::recognizeGrammarWritingSources,
+                onAccept = viewModel::acceptGrammarWritingIssue,
+                onBack = { navController.popBackStack() }
             )
         }
     }

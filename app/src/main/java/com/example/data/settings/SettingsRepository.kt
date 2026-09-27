@@ -18,6 +18,7 @@ class SettingsRepository(private val context: Context) {
     private object Keys {
         val onboardingCompleted = booleanPreferencesKey("onboarding_completed")
         val dataInitialized = booleanPreferencesKey("data_initialized")
+        val grammarMode = booleanPreferencesKey("grammar_mode")
         val dailyGoalCards = intPreferencesKey("daily_goal_cards")
         val themeMode = stringPreferencesKey("theme_mode")
         val themeColorPreset = stringPreferencesKey("theme_color_preset")
@@ -84,6 +85,7 @@ class SettingsRepository(private val context: Context) {
         AppSettings(
             onboardingCompleted = value[Keys.onboardingCompleted] ?: false,
             dataInitialized = value[Keys.dataInitialized] ?: false,
+            grammarMode = value[Keys.grammarMode] ?: false,
             dailyGoalCards = (value[Keys.dailyGoalCards] ?: 20).coerceIn(5, 100),
             themeMode = value[Keys.themeMode] ?: "SYSTEM",
             themeColorPreset = value[Keys.themeColorPreset] ?: "GREEN",
@@ -141,6 +143,7 @@ class SettingsRepository(private val context: Context) {
         val key = when (name) {
             "onboardingCompleted" -> Keys.onboardingCompleted
             "dataInitialized" -> Keys.dataInitialized
+            "grammarMode" -> Keys.grammarMode
             "advancedSrs" -> Keys.advancedSrs
             "aiEnabled" -> Keys.aiEnabled
             "aiRequiresConfirmation" -> Keys.aiRequiresConfirmation

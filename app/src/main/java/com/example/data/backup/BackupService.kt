@@ -7,6 +7,11 @@ import com.example.data.AppDatabase
 import com.example.data.entity.Deck
 import com.example.data.entity.Flashcard
 import com.example.data.entity.StudyLog
+import com.example.data.entity.GrammarNote
+import com.example.data.entity.GrammarQuestion
+import com.example.data.entity.GrammarWeakness
+import com.example.data.entity.GrammarPattern
+import com.example.data.entity.GrammarExample
 import com.example.data.learning.StudyCheckInStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -25,9 +30,14 @@ class BackupService(
         val decks = database.deckDao().getAllDecks().first()
         val cards = database.flashcardDao().getAllCards().first()
         val logs = database.studyLogDao().getAllLogs().first()
+        val grammarNotes = database.grammarNoteDao().getAll().first()
+        val grammarQuestions = database.grammarQuestionDao().getAllQuestions().first()
+        val grammarWeaknesses = database.grammarQuestionDao().getAllWeaknesses().first()
+        val grammarPatterns = database.grammarContentDao().getAllPatterns().first()
+        val grammarExamples = database.grammarContentDao().getAllExamples().first()
         val root = JSONObject()
             .put("format", "vocab-backup")
-            .put("version", 2)
+            .put("version", 6)
             .put("exportedAt", System.currentTimeMillis())
             .put("decks", JSONArray().apply {
                 decks.forEach { deck ->
@@ -47,6 +57,60 @@ class BackupService(
             .put("studyLogs", JSONArray().apply {
                 logs.forEach { log ->
                     put(JSONObject().put("cardId", log.cardId).put("rating", log.rating).put("reviewedAt", log.reviewedAt))
+                }
+            })
+            .put("grammarNotes", JSONArray().apply {
+                grammarNotes.forEach { note ->
+                    put(JSONObject()
+                        .put("id", note.id).put("course", note.course).put("title", note.title)
+                        .put("category", note.category).put("level", note.level)
+                        .put("summary", note.summary).put("structure", note.structure).put("usage", note.usage)
+                        .put("exampleSentence", note.exampleSentence).put("exampleTranslation", note.exampleTranslation)
+                        .put("commonMistakes", note.commonMistakes).put("comparison", note.comparison)
+                        .put("tags", note.tags).put("sourceType", note.sourceType).put("sourceName", note.sourceName)
+                        .put("questionTemplate", note.questionTemplate).put("answer", note.answer)
+                        .put("acceptedAnswers", note.acceptedAnswers).put("options", note.options)
+                        .put("explanation", note.explanation).put("favorite", note.favorite)
+                        .put("masteryPercent", note.masteryPercent).put("nextReviewAt", note.nextReviewAt)
+                        .put("studyStep", note.studyStep).put("attemptCount", note.attemptCount)
+                        .put("correctCount", note.correctCount).put("createdAt", note.createdAt)
+                        .put("updatedAt", note.updatedAt).put("sortOrder", note.sortOrder))
+                }
+            })
+            .put("grammarPatterns", JSONArray().apply {
+                grammarPatterns.forEach { pattern -> put(JSONObject()
+                    .put("id", pattern.id).put("grammarNoteId", pattern.grammarNoteId)
+                    .put("title", pattern.title).put("formula", pattern.formula)
+                    .put("meaning", pattern.meaning).put("usage", pattern.usage)
+                    .put("notes", pattern.notes).put("masteryPercent", pattern.masteryPercent)
+                    .put("nextReviewAt", pattern.nextReviewAt).put("attemptCount", pattern.attemptCount)
+                    .put("correctCount", pattern.correctCount).put("sortOrder", pattern.sortOrder))
+                }
+            })
+            .put("grammarExamples", JSONArray().apply {
+                grammarExamples.forEach { example -> put(JSONObject()
+                    .put("id", example.id).put("grammarNoteId", example.grammarNoteId)
+                    .put("grammarPatternId", example.grammarPatternId).put("sentence", example.sentence)
+                    .put("translation", example.translation).put("highlightedText", example.highlightedText)
+                    .put("sortOrder", example.sortOrder))
+                }
+            })
+            .put("grammarQuestions", JSONArray().apply {
+                grammarQuestions.forEach { q -> put(JSONObject()
+                    .put("id", q.id).put("grammarNoteId", q.grammarNoteId).put("type", q.type)
+                    .put("grammarPatternId", q.grammarPatternId)
+                    .put("prompt", q.prompt).put("translation", q.translation).put("answer", q.answer)
+                    .put("acceptedAnswers", q.acceptedAnswers).put("options", q.options)
+                    .put("explanation", q.explanation).put("difficulty", q.difficulty)
+                    .put("sourceType", q.sourceType).put("sortOrder", q.sortOrder))
+                }
+            })
+            .put("grammarWeaknesses", JSONArray().apply {
+                grammarWeaknesses.forEach { w -> put(JSONObject()
+                    .put("ruleKey", w.ruleKey).put("grammarNoteId", w.grammarNoteId).put("title", w.title)
+                    .put("originalText", w.originalText).put("correctedText", w.correctedText)
+                    .put("explanation", w.explanation).put("occurrenceCount", w.occurrenceCount)
+                    .put("lastOccurredAt", w.lastOccurredAt))
                 }
             })
             .put("makeUpCheckIns", JSONArray(studyCheckInStore.currentDates().map(LocalDate::toString)))
@@ -81,6 +145,11 @@ class BackupService(
         val cardItems = root.optJSONArray("cards") ?: JSONArray()
         val logItems = root.optJSONArray("studyLogs") ?: JSONArray()
         val checkInItems = root.optJSONArray("makeUpCheckIns") ?: JSONArray()
+        val grammarItems = root.optJSONArray("grammarNotes") ?: JSONArray()
+        val grammarQuestionItems = root.optJSONArray("grammarQuestions") ?: JSONArray()
+        val grammarWeaknessItems = root.optJSONArray("grammarWeaknesses") ?: JSONArray()
+        val grammarPatternItems = root.optJSONArray("grammarPatterns") ?: JSONArray()
+        val grammarExampleItems = root.optJSONArray("grammarExamples") ?: JSONArray()
         var imported = 0
         database.withTransaction {
             val existingDecks = database.deckDao().getAllDecks().first().toMutableList()
@@ -144,6 +213,105 @@ class BackupService(
                 database.studyLogDao().insertLog(
                     StudyLog(cardId = cardId, rating = rating, reviewedAt = item.optLong("reviewedAt"))
                 )
+            }
+            val existingGrammar = database.grammarNoteDao().getAllOnce()
+            val grammarIdMap = mutableMapOf<Long, Long>()
+            for (index in 0 until grammarItems.length()) {
+                val item = grammarItems.optJSONObject(index) ?: continue
+                val title = item.optString("title").trim()
+                if (title.isBlank()) continue
+                val course = item.optString("course", "通用").trim().ifBlank { "通用" }
+                val existingNote = existingGrammar.firstOrNull { it.title.equals(title, true) && it.course.equals(course, true) }
+                val newGrammarId = existingNote?.id ?: database.grammarNoteDao().insert(
+                    GrammarNote(
+                        course = course, title = title, category = item.optString("category", "其他"),
+                        level = item.optString("level", "未分級"), summary = item.optString("summary"),
+                        structure = item.optString("structure"), usage = item.optString("usage"),
+                        exampleSentence = item.optString("exampleSentence"),
+                        exampleTranslation = item.optString("exampleTranslation"),
+                        commonMistakes = item.optString("commonMistakes"), comparison = item.optString("comparison"),
+                        tags = item.optString("tags"), sourceType = item.optString("sourceType", "IMPORT"),
+                        sourceName = item.optString("sourceName"), questionTemplate = item.optString("questionTemplate"),
+                        answer = item.optString("answer"), acceptedAnswers = item.optString("acceptedAnswers"),
+                        options = item.optString("options"), explanation = item.optString("explanation"),
+                        favorite = item.optBoolean("favorite"), masteryPercent = item.optInt("masteryPercent").coerceIn(0, 100),
+                        nextReviewAt = item.optLong("nextReviewAt", System.currentTimeMillis()),
+                        studyStep = item.optInt("studyStep").coerceAtLeast(0), attemptCount = item.optInt("attemptCount"),
+                        correctCount = item.optInt("correctCount"), createdAt = item.optLong("createdAt", System.currentTimeMillis()),
+                        updatedAt = item.optLong("updatedAt", System.currentTimeMillis()),
+                        sortOrder = item.optLong("sortOrder", item.optLong("createdAt", System.currentTimeMillis()))
+                    )
+                )
+                grammarIdMap[item.optLong("id")] = newGrammarId
+                // Version 3 and older stored one question directly on the note.
+                if (grammarQuestionItems.length() == 0 && item.optString("questionTemplate").isNotBlank() &&
+                    database.grammarQuestionDao().getForNote(newGrammarId).isEmpty()
+                ) database.grammarQuestionDao().insertQuestion(
+                    GrammarQuestion(
+                        grammarNoteId = newGrammarId, prompt = item.optString("questionTemplate"),
+                        translation = item.optString("exampleTranslation"), answer = item.optString("answer"),
+                        acceptedAnswers = item.optString("acceptedAnswers"), options = item.optString("options"),
+                        explanation = item.optString("explanation"), sourceType = "IMPORT"
+                    )
+                )
+            }
+            val grammarPatternIdMap = mutableMapOf<Long, Long>()
+            for (index in 0 until grammarPatternItems.length()) {
+                val item = grammarPatternItems.optJSONObject(index) ?: continue
+                val grammarId = grammarIdMap[item.optLong("grammarNoteId")] ?: continue
+                val formula = item.optString("formula").trim()
+                if (formula.isBlank()) continue
+                val newPatternId = database.grammarContentDao().insertPattern(GrammarPattern(
+                    grammarNoteId = grammarId, title = item.optString("title", "句型"), formula = formula,
+                    meaning = item.optString("meaning"), usage = item.optString("usage"),
+                    notes = item.optString("notes"), masteryPercent = item.optInt("masteryPercent").coerceIn(0, 100),
+                    nextReviewAt = item.optLong("nextReviewAt", System.currentTimeMillis()),
+                    attemptCount = item.optInt("attemptCount").coerceAtLeast(0),
+                    correctCount = item.optInt("correctCount").coerceAtLeast(0),
+                    sortOrder = item.optLong("sortOrder", index.toLong())
+                ))
+                grammarPatternIdMap[item.optLong("id")] = newPatternId
+            }
+            for (index in 0 until grammarExampleItems.length()) {
+                val item = grammarExampleItems.optJSONObject(index) ?: continue
+                val grammarId = grammarIdMap[item.optLong("grammarNoteId")] ?: continue
+                val sentence = item.optString("sentence").trim()
+                if (sentence.isBlank()) continue
+                database.grammarContentDao().insertExample(GrammarExample(
+                    grammarNoteId = grammarId,
+                    grammarPatternId = grammarPatternIdMap[item.optLong("grammarPatternId")] ?: 0,
+                    sentence = sentence, translation = item.optString("translation"),
+                    highlightedText = item.optString("highlightedText"),
+                    sortOrder = item.optLong("sortOrder", index.toLong())
+                ))
+            }
+            for (index in 0 until grammarQuestionItems.length()) {
+                val item = grammarQuestionItems.optJSONObject(index) ?: continue
+                val grammarId = grammarIdMap[item.optLong("grammarNoteId")] ?: continue
+                val prompt = item.optString("prompt").trim(); val answer = item.optString("answer").trim()
+                if (prompt.isBlank() || answer.isBlank()) continue
+                if (database.grammarQuestionDao().getForNote(grammarId).any { it.prompt == prompt && it.answer.equals(answer, true) }) continue
+                database.grammarQuestionDao().insertQuestion(GrammarQuestion(
+                    grammarNoteId = grammarId,
+                    grammarPatternId = grammarPatternIdMap[item.optLong("grammarPatternId")] ?: 0,
+                    type = item.optString("type", "CLOZE_CHOICE"), prompt = prompt,
+                    translation = item.optString("translation"), answer = answer,
+                    acceptedAnswers = item.optString("acceptedAnswers"), options = item.optString("options"),
+                    explanation = item.optString("explanation"), difficulty = item.optInt("difficulty", 1).coerceIn(1, 3),
+                    sourceType = item.optString("sourceType", "IMPORT"), sortOrder = item.optLong("sortOrder", System.currentTimeMillis())
+                ))
+            }
+            for (index in 0 until grammarWeaknessItems.length()) {
+                val item = grammarWeaknessItems.optJSONObject(index) ?: continue
+                val grammarId = grammarIdMap[item.optLong("grammarNoteId")] ?: continue
+                val ruleKey = item.optString("ruleKey").trim()
+                if (ruleKey.isBlank() || database.grammarQuestionDao().getWeakness(ruleKey) != null) continue
+                database.grammarQuestionDao().insertWeakness(GrammarWeakness(
+                    ruleKey = ruleKey, grammarNoteId = grammarId, title = item.optString("title"),
+                    originalText = item.optString("originalText"), correctedText = item.optString("correctedText"),
+                    explanation = item.optString("explanation"), occurrenceCount = item.optInt("occurrenceCount", 1).coerceAtLeast(1),
+                    lastOccurredAt = item.optLong("lastOccurredAt", System.currentTimeMillis())
+                ))
             }
         }
         studyCheckInStore.merge(

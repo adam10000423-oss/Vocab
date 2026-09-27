@@ -15,6 +15,7 @@ data class ReminderTime(
 data class AppSettings(
     val onboardingCompleted: Boolean = false,
     val dataInitialized: Boolean = false,
+    val grammarMode: Boolean = false,
     val dailyGoalCards: Int = 20,
     val themeMode: String = "SYSTEM",
     val themeColorPreset: String = "GREEN",

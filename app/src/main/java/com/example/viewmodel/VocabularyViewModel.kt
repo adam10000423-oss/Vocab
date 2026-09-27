@@ -11,6 +11,17 @@ import com.example.data.dictionary.GoogleTranslateLookupService
 import com.example.data.entity.Deck
 import com.example.data.entity.Flashcard
 import com.example.data.entity.StudyLog
+import com.example.data.entity.GrammarDraft
+import com.example.data.entity.GrammarNote
+import com.example.data.entity.GrammarQuestion
+import com.example.data.entity.GrammarQuestionDraft
+import com.example.data.entity.GrammarWeakness
+import com.example.data.entity.GrammarWritingIssue
+import com.example.data.entity.GrammarWritingScanResult
+import com.example.data.entity.GrammarPattern
+import com.example.data.entity.GrammarPatternDraft
+import com.example.data.entity.GrammarExample
+import com.example.data.entity.GrammarExampleDraft
 import com.example.data.importer.ExternalCardCandidate
 import com.example.data.importer.AiExternalFormattingResult
 import com.example.data.learning.LearningSessionStore
@@ -21,6 +32,7 @@ import com.example.data.settings.SettingsRepository
 import com.example.data.pronunciation.PronunciationPracticeStore
 import com.example.util.DocumentParser
 import com.example.util.AiImagePreprocessor
+import androidx.room.withTransaction
 import com.example.util.OcrCardCandidate
 import com.example.widgets.VocabWidgetProvider
 import com.example.util.OcrWordParser
@@ -108,6 +120,31 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
     )
 
     val allCards: StateFlow<List<Flashcard>> = repository.allCards.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+    val allGrammarNotes: StateFlow<List<GrammarNote>> = db.grammarNoteDao().getAll().stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+    val allGrammarQuestions: StateFlow<List<GrammarQuestion>> = db.grammarQuestionDao().getAllQuestions().stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+    val allGrammarPatterns: StateFlow<List<GrammarPattern>> = db.grammarContentDao().getAllPatterns().stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+    val allGrammarExamples: StateFlow<List<GrammarExample>> = db.grammarContentDao().getAllExamples().stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+    val grammarWeaknesses: StateFlow<List<GrammarWeakness>> = db.grammarQuestionDao().getAllWeaknesses().stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = emptyList()
@@ -235,6 +272,646 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
         _selectedDeckId.value = deckId
     }
 
+    fun saveGrammarNote(note: GrammarNote, onComplete: (Long) -> Unit = {}) {
+        viewModelScope.launch {
+            runCatching {
+                val normalized = note.copy(
+                    course = note.course.trim().ifBlank { "通用" },
+                    title = note.title.trim(),
+                    updatedAt = System.currentTimeMillis()
+                )
+                require(normalized.title.isNotBlank()) { "請輸入文法名稱" }
+                if (normalized.questionTemplate.isNotBlank()) {
+                    require("{{answer}}" in normalized.questionTemplate) { "練習題必須用 {{answer}} 標記挖空位置" }
+                    require(normalized.answer.isNotBlank()) { "練習題必須填寫正確答案" }
+                    val choices = normalized.options.split(',', '、', '\n')
+                        .map { it.trim().lowercase() }
+                        .filter(String::isNotBlank)
+                    require(choices.isEmpty() || normalized.answer.trim().lowercase() in choices) {
+                        "選項必須包含正確答案"
+                    }
+                }
+                if (normalized.id == 0L) db.grammarNoteDao().insert(normalized)
+                else {
+                    db.grammarNoteDao().update(normalized)
+                    normalized.id
+                }
+            }.onSuccess(onComplete).onFailure {
+                _dataMessage.value = "儲存文法失敗：${it.message ?: "未知錯誤"}"
+            }
+        }
+    }
+
+    fun saveGrammarNoteBundle(
+        note: GrammarNote,
+        questions: List<GrammarQuestionDraft>,
+        patterns: List<GrammarPatternDraft> = emptyList(),
+        onComplete: (Long) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            runCatching {
+                db.withTransaction {
+                    val normalized = note.copy(
+                        course = note.course.trim().ifBlank { "通用" },
+                        title = note.title.trim(),
+                        updatedAt = System.currentTimeMillis()
+                    )
+                    require(normalized.title.isNotBlank()) { "請輸入文法名稱" }
+                    questions.forEach(::validateGrammarQuestion)
+                    val noteId = if (normalized.id == 0L) db.grammarNoteDao().insert(normalized)
+                    else {
+                        db.grammarNoteDao().update(normalized)
+                        normalized.id
+                    }
+                    val previousPatterns = db.grammarContentDao().getPatternsForNote(noteId)
+                    db.grammarQuestionDao().deleteForNote(noteId)
+                    db.grammarContentDao().deleteExamplesForNote(noteId)
+                    db.grammarContentDao().deletePatternsForNote(noteId)
+                    val effectivePatterns = patterns.ifEmpty { normalized.toLegacyPatternDrafts() }
+                    val patternIds = effectivePatterns.mapIndexed { patternIndex, pattern ->
+                        val previous = previousPatterns.firstOrNull { it.formula.trim().equals(pattern.formula.trim(), true) }
+                        val patternId = db.grammarContentDao().insertPattern(
+                            GrammarPattern(
+                                grammarNoteId = noteId,
+                                title = pattern.title.trim().ifBlank { "句型 ${patternIndex + 1}" },
+                                formula = pattern.formula.trim(), meaning = pattern.meaning.trim(),
+                                usage = pattern.usage.trim(), notes = pattern.notes.trim(),
+                                masteryPercent = previous?.masteryPercent ?: 0,
+                                nextReviewAt = previous?.nextReviewAt ?: System.currentTimeMillis(),
+                                attemptCount = previous?.attemptCount ?: 0,
+                                correctCount = previous?.correctCount ?: 0,
+                                sortOrder = patternIndex.toLong()
+                            )
+                        )
+                        pattern.examples.filter { it.sentence.isNotBlank() }.forEachIndexed { exampleIndex, example ->
+                            db.grammarContentDao().insertExample(
+                                GrammarExample(
+                                    grammarNoteId = noteId, grammarPatternId = patternId,
+                                    sentence = example.sentence.trim(), translation = example.translation.trim(),
+                                    highlightedText = example.highlightedText.trim(), sortOrder = exampleIndex.toLong()
+                                )
+                            )
+                        }
+                        patternId
+                    }
+                    questions.forEachIndexed { index, draft ->
+                        db.grammarQuestionDao().insertQuestion(
+                            GrammarQuestion(
+                                grammarNoteId = noteId,
+                                grammarPatternId = patternIds.getOrNull(draft.grammarPatternIndex) ?: 0,
+                                type = draft.type,
+                                prompt = draft.prompt.trim(),
+                                translation = draft.translation.trim(),
+                                answer = draft.answer.trim(),
+                                acceptedAnswers = draft.acceptedAnswers.trim(),
+                                options = draft.options.trim(),
+                                explanation = draft.explanation.trim(),
+                                difficulty = draft.difficulty.coerceIn(1, 3),
+                                sourceType = draft.sourceType,
+                                sortOrder = index.toLong()
+                            )
+                        )
+                    }
+                    noteId
+                }
+            }.onSuccess(onComplete).onFailure {
+                _dataMessage.value = "儲存文法失敗：${it.message ?: "未知錯誤"}"
+            }
+        }
+    }
+
+    fun saveGrammarDrafts(
+        drafts: List<GrammarDraft>,
+        course: String,
+        duplicateMode: String,
+        onComplete: (List<Long>) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            runCatching {
+                db.withTransaction {
+                    val savedIds = mutableListOf<Long>()
+                    drafts.filter { it.title.isNotBlank() }.forEach { draft ->
+                        draft.questions.forEach(::validateGrammarQuestion)
+                        val normalizedCourse = course.trim().ifBlank { "通用" }
+                        val existing = db.grammarNoteDao().getAllOnce().firstOrNull {
+                            it.course.equals(normalizedCourse, true) && it.title.equals(draft.title.trim(), true)
+                        }
+                        if (existing != null && duplicateMode == "SKIP") return@forEach
+                        val title = if (existing != null && duplicateMode == "COPY") {
+                            var index = 2
+                            var candidate: String
+                            val names = db.grammarNoteDao().getAllOnce().map { it.title.lowercase() }.toSet()
+                            do { candidate = "${draft.title.trim()} ($index)"; index++ } while (candidate.lowercase() in names)
+                            candidate
+                        } else draft.title.trim()
+                        val legacy = draft.questions.firstOrNull()
+                        val note = GrammarNote(
+                            id = if (existing != null && duplicateMode == "OVERWRITE") existing.id else 0,
+                            course = normalizedCourse, title = title, category = draft.category,
+                            level = draft.level, summary = draft.summary,
+                            structure = draft.structure, usage = draft.usage,
+                            exampleSentence = draft.exampleSentence, exampleTranslation = draft.exampleTranslation,
+                            commonMistakes = draft.commonMistakes, comparison = draft.comparison,
+                            tags = draft.tags, sourceType = "IMPORT",
+                            questionTemplate = legacy?.prompt.orEmpty(), answer = legacy?.answer.orEmpty(),
+                            acceptedAnswers = legacy?.acceptedAnswers.orEmpty(), options = legacy?.options.orEmpty(),
+                            explanation = legacy?.explanation.orEmpty(),
+                            favorite = existing?.favorite ?: false,
+                            masteryPercent = if (duplicateMode == "OVERWRITE") existing?.masteryPercent ?: 0 else 0,
+                            nextReviewAt = existing?.nextReviewAt ?: System.currentTimeMillis(),
+                            studyStep = existing?.studyStep ?: 0,
+                            attemptCount = existing?.attemptCount ?: 0,
+                            correctCount = existing?.correctCount ?: 0,
+                            createdAt = existing?.createdAt ?: System.currentTimeMillis()
+                        )
+                        val noteId = if (note.id == 0L) db.grammarNoteDao().insert(note)
+                        else { db.grammarNoteDao().update(note.copy(updatedAt = System.currentTimeMillis())); note.id }
+                        val previousPatterns = db.grammarContentDao().getPatternsForNote(noteId)
+                        db.grammarQuestionDao().deleteForNote(noteId)
+                        db.grammarContentDao().deleteExamplesForNote(noteId)
+                        db.grammarContentDao().deletePatternsForNote(noteId)
+                        val effectivePatterns = draft.patterns.ifEmpty { note.toLegacyPatternDrafts() }
+                        val patternIds = effectivePatterns.mapIndexed { patternIndex, pattern ->
+                            val previous = previousPatterns.firstOrNull { it.formula.trim().equals(pattern.formula.trim(), true) }
+                            val patternId = db.grammarContentDao().insertPattern(GrammarPattern(
+                                grammarNoteId = noteId, title = pattern.title.ifBlank { "句型 ${patternIndex + 1}" },
+                                formula = pattern.formula, meaning = pattern.meaning, usage = pattern.usage,
+                                notes = pattern.notes,
+                                masteryPercent = previous?.masteryPercent ?: 0,
+                                nextReviewAt = previous?.nextReviewAt ?: System.currentTimeMillis(),
+                                attemptCount = previous?.attemptCount ?: 0,
+                                correctCount = previous?.correctCount ?: 0,
+                                sortOrder = patternIndex.toLong()
+                            ))
+                            pattern.examples.filter { it.sentence.isNotBlank() }.forEachIndexed { exampleIndex, example ->
+                                db.grammarContentDao().insertExample(GrammarExample(
+                                    grammarNoteId = noteId, grammarPatternId = patternId,
+                                    sentence = example.sentence, translation = example.translation,
+                                    highlightedText = example.highlightedText, sortOrder = exampleIndex.toLong()
+                                ))
+                            }
+                            patternId
+                        }
+                        draft.questions.forEachIndexed { index, q ->
+                            db.grammarQuestionDao().insertQuestion(GrammarQuestion(
+                                grammarNoteId = noteId,
+                                grammarPatternId = patternIds.getOrNull(q.grammarPatternIndex) ?: 0,
+                                type = q.type, prompt = q.prompt.trim(),
+                                translation = q.translation.trim(), answer = q.answer.trim(),
+                                acceptedAnswers = q.acceptedAnswers.trim(), options = q.options.trim(),
+                                explanation = q.explanation.trim(), difficulty = q.difficulty.coerceIn(1, 3),
+                                sourceType = q.sourceType, sortOrder = index.toLong()
+                            ))
+                        }
+                        savedIds += noteId
+                    }
+                    savedIds
+                }
+            }.onSuccess(onComplete).onFailure {
+                _dataMessage.value = "匯入文法失敗：${it.message ?: "未知錯誤"}"
+            }
+        }
+    }
+
+    private fun validateGrammarQuestion(question: GrammarQuestionDraft) {
+        require(question.prompt.isNotBlank()) { "題目內容不能空白" }
+        require("{{answer}}" in question.prompt) { "每題必須用 {{answer}} 標記唯一挖空位置" }
+        require(question.prompt.windowed("{{answer}}".length).count { it == "{{answer}}" } == 1) {
+            "每題只能有一個答案位置"
+        }
+        require(question.answer.isNotBlank()) { "每題都必須填寫正確答案" }
+        val choices = question.options.split(',', '、', '\n').map { it.trim().lowercase() }.filter(String::isNotBlank)
+        require(choices.isEmpty() || question.answer.trim().lowercase() in choices) { "題目選項必須包含正確答案" }
+        require(choices.size == choices.distinct().size) { "題目選項不能重複" }
+    }
+
+    private fun GrammarNote.toLegacyPatternDrafts(): List<GrammarPatternDraft> {
+        if (structure.isBlank() && exampleSentence.isBlank()) return emptyList()
+        val formulas = structure.lines().map(String::trim).filter(String::isNotBlank)
+            .ifEmpty { listOf("主要句型") }
+        return formulas.mapIndexed { index, formula ->
+            GrammarPatternDraft(
+                title = if (formulas.size == 1) "主要句型" else "句型 ${index + 1}",
+                formula = formula,
+                meaning = if (index == 0) summary else "",
+                usage = if (index == 0) usage else "",
+                examples = if (index == 0 && exampleSentence.isNotBlank()) listOf(
+                    GrammarExampleDraft(exampleSentence, exampleTranslation)
+                ) else emptyList()
+            )
+        }
+    }
+
+    fun deleteGrammarNote(note: GrammarNote, onComplete: () -> Unit = {}) {
+        viewModelScope.launch {
+            runCatching {
+                db.withTransaction {
+                    db.grammarQuestionDao().deleteForNote(note.id)
+                    db.grammarQuestionDao().deleteWeaknessesForNote(note.id)
+                    db.grammarContentDao().deleteExamplesForNote(note.id)
+                    db.grammarContentDao().deletePatternsForNote(note.id)
+                    db.grammarNoteDao().delete(note)
+                }
+            }
+                .onSuccess { onComplete() }
+                .onFailure { _dataMessage.value = "刪除文法失敗：${it.message ?: "未知錯誤"}" }
+        }
+    }
+
+    fun toggleGrammarFavorite(note: GrammarNote) {
+        viewModelScope.launch {
+            db.grammarNoteDao().getById(note.id)?.let { current ->
+                db.grammarNoteDao().update(current.copy(favorite = !current.favorite, updatedAt = System.currentTimeMillis()))
+            }
+        }
+    }
+
+    fun updateGrammarStudyStep(note: GrammarNote, step: Int) {
+        viewModelScope.launch {
+            db.grammarNoteDao().getById(note.id)?.let { current ->
+                db.grammarNoteDao().update(current.copy(studyStep = step.coerceAtLeast(0), updatedAt = System.currentTimeMillis()))
+            }
+        }
+    }
+
+    fun recordGrammarAnswer(note: GrammarNote, correct: Boolean, usedHint: Boolean = false) {
+        viewModelScope.launch {
+            val current = db.grammarNoteDao().getById(note.id) ?: return@launch
+            val now = System.currentTimeMillis()
+            val gain = when {
+                !correct -> -8
+                usedHint -> 3
+                else -> 8
+            }
+            val nextMastery = (current.masteryPercent + gain).coerceIn(0, 100)
+            val delayDays = when {
+                !correct -> 1L
+                nextMastery < 40 -> 2L
+                nextMastery < 70 -> 4L
+                nextMastery < 90 -> 7L
+                else -> 14L
+            }
+            db.grammarNoteDao().update(
+                current.copy(
+                    masteryPercent = nextMastery,
+                    nextReviewAt = now + delayDays * 86_400_000L,
+                    attemptCount = current.attemptCount + 1,
+                    correctCount = current.correctCount + if (correct) 1 else 0,
+                    studyStep = if (correct) 4 else current.studyStep,
+                    updatedAt = now
+                )
+            )
+        }
+    }
+
+    fun recordGrammarPatternResult(patternId: Long, correct: Boolean, usedHint: Boolean = false) {
+        if (patternId <= 0) return
+        viewModelScope.launch {
+            val pattern = db.grammarContentDao().getPatternById(patternId) ?: return@launch
+            val now = System.currentTimeMillis()
+            val gain = when { !correct -> -10; usedHint -> 3; else -> 10 }
+            val mastery = (pattern.masteryPercent + gain).coerceIn(0, 100)
+            val days = when { !correct -> 1L; mastery < 40 -> 2L; mastery < 70 -> 4L; mastery < 90 -> 7L; else -> 14L }
+            db.grammarContentDao().updatePattern(pattern.copy(
+                masteryPercent = mastery,
+                nextReviewAt = now + days * 86_400_000L,
+                attemptCount = pattern.attemptCount + 1,
+                correctCount = pattern.correctCount + if (correct) 1 else 0
+            ))
+        }
+    }
+
+    suspend fun generateGrammarDraft(request: String): GrammarDraft {
+        require(settings.value.aiEnabled) { "請先在設定中啟用 AI" }
+        val result = GeminiService.runAssistant(
+            """
+            你是嚴謹的英文文法教材編輯。請根據使用者要求建立一篇繁體中文文法筆記。
+            一篇筆記代表一個可獨立學習與測驗的「文法類型」；同一類型可包含多組句型，每組句型再包含多個例句。
+            只回傳一個 JSON 物件，不要 Markdown。欄位：
+            title, category, level, summary, commonMistakes, comparison, tags、patterns 與 questions。
+            patterns 每組包含 title, formula, meaning, usage, notes, examples；examples 每筆包含 sentence, translation, highlightedText。
+            每個獨立句型必須分成一組 pattern，不可把全部公式塞進同一字串。
+            structure、usage、commonMistakes、comparison 可用換行分隔；tags、acceptedAnswers、options 用逗號分隔。
+            questions 每題格式：grammarPatternIndex, type, prompt, translation, answer, acceptedAnswers, options, explanation, difficulty。
+            prompt 必須用 {{answer}} 標記唯一挖空位置，答案填回後必須成為自然完整的英文句子。
+            options 必須包含 answer、不得重複，最多四個。每個例句至少建立一題，並另外補足至 6～12 題；grammarPatternIndex 必須正確指向所屬句型。
+            不確定的內容留空，不可捏造來源。
+
+            使用者要求：${request.trim()}
+            """.trimIndent()
+        )
+        return parseGrammarDraft(result)
+    }
+
+    suspend fun generateGrammarDraftFromText(text: String, mode: String): GrammarDraft {
+        require(text.isNotBlank()) { "請先貼上文法內容" }
+        val rule = when (mode) {
+            "ENRICH" -> "保留原文內容，並補充自然例句、常見錯誤與 6～12 題練習。"
+            "ORGANIZE" -> "不可改變原意，將內容整理成結構清楚的筆記與練習題。"
+            else -> "只能擷取文字中確實存在的內容，不得補充或猜測；原文沒有題目就不要建立題目。"
+        }
+        return generateGrammarDraft("$rule\n\n待匯入內容：\n${text.trim()}")
+    }
+
+    suspend fun readGrammarShare(uri: Uri): List<GrammarDraft> {
+        val text = getApplication<Application>().contentResolver.openInputStream(uri)
+            ?.bufferedReader()?.use { it.readText() } ?: error("無法讀取分享檔")
+        val root = JSONObject(text)
+        require(root.optString("format") == "vocabshare") { "不是有效的 .vocabshare 檔案" }
+        val items = root.optJSONArray("grammar") ?: root.optJSONArray("items") ?: JSONArray()
+        return buildList {
+            for (i in 0 until items.length()) {
+                val item = items.optJSONObject(i) ?: continue
+                val questionsJson = item.optJSONArray("questions") ?: JSONArray()
+                val patternsJson = item.optJSONArray("patterns") ?: JSONArray()
+                val patterns = buildList {
+                    for (patternIndex in 0 until patternsJson.length()) {
+                        val pattern = patternsJson.optJSONObject(patternIndex) ?: continue
+                        val examplesJson = pattern.optJSONArray("examples") ?: JSONArray()
+                        val examples = buildList {
+                            for (exampleIndex in 0 until examplesJson.length()) {
+                                val example = examplesJson.optJSONObject(exampleIndex) ?: continue
+                                val sentence = example.optString("sentence").trim()
+                                if (sentence.isNotBlank()) add(GrammarExampleDraft(sentence, example.optString("translation"), example.optString("highlightedText")))
+                            }
+                        }
+                        val formula = pattern.optString("formula").trim()
+                        if (formula.isNotBlank()) add(GrammarPatternDraft(
+                            title = pattern.optString("title", "句型 ${patternIndex + 1}"), formula = formula,
+                            meaning = pattern.optString("meaning"), usage = pattern.optString("usage"),
+                            notes = pattern.optString("notes"), examples = examples
+                        ))
+                    }
+                }
+                val questions = buildList {
+                    for (qIndex in 0 until questionsJson.length()) {
+                        val q = questionsJson.optJSONObject(qIndex) ?: continue
+                        val draft = GrammarQuestionDraft(
+                            grammarPatternIndex = q.optInt("grammarPatternIndex", -1),
+                            type = q.optString("type", "CLOZE_CHOICE"), prompt = q.optString("prompt"),
+                            translation = q.optString("translation"), answer = q.optString("answer"),
+                            acceptedAnswers = q.optString("acceptedAnswers"), options = q.optString("options"),
+                            explanation = q.optString("explanation"), difficulty = q.optInt("difficulty", 1).coerceIn(1, 3),
+                            sourceType = "SHARE"
+                        )
+                        if (draft.prompt.isNotBlank() && draft.answer.isNotBlank()) add(draft)
+                    }
+                }
+                val draft = GrammarDraft(
+                    title = item.optString("title"), category = item.optString("category", "其他"),
+                    level = item.optString("level", "未分級"), summary = item.optString("summary"),
+                    structure = item.optString("structure"), usage = item.optString("usage"),
+                    exampleSentence = item.optString("exampleSentence"), exampleTranslation = item.optString("exampleTranslation"),
+                    commonMistakes = item.optString("commonMistakes"), comparison = item.optString("comparison"),
+                    tags = item.optString("tags"), patterns = patterns, questions = questions
+                )
+                if (draft.title.isNotBlank()) add(draft)
+            }
+        }.also { require(it.isNotEmpty()) { "分享檔沒有可匯入的文法" } }
+    }
+
+    suspend fun generateGrammarDraftFromImages(uris: List<Uri>): GrammarDraft = generateGrammarDraftsFromSources(uris).first()
+
+    suspend fun generateGrammarDraftFromSources(uris: List<Uri>, mode: String = "FAITHFUL"): GrammarDraft =
+        generateGrammarDraftsFromSources(uris, mode).first()
+
+    suspend fun generateGrammarDraftsFromSources(uris: List<Uri>, mode: String = "FAITHFUL"): List<GrammarDraft> {
+        require(settings.value.aiEnabled) { "請先在設定中啟用 AI" }
+        require(uris.isNotEmpty()) { "請先選擇圖片或檔案" }
+        val context = getApplication<Application>()
+        val payloads = buildList {
+            uris.take(5).forEach { uri ->
+                val mime = context.contentResolver.getType(uri).orEmpty()
+                if (mime.contains("pdf", true)) addAll(DocumentParser.renderPdfPagesForAi(context, uri, 5))
+                else if (mime.startsWith("image/")) add(AiImagePreprocessor.prepare(context, uri))
+            }
+        }
+        val extractedText = uris.take(5).mapNotNull { uri ->
+            val mime = context.contentResolver.getType(uri).orEmpty()
+            if (mime.startsWith("image/") || mime.contains("pdf", true)) null
+            else runCatching { DocumentParser.extractTextFromUri(context, uri, settings.value.pdfPageLimit) }.getOrNull()
+        }.filter(String::isNotBlank).joinToString("\n\n")
+        require(payloads.isNotEmpty() || extractedText.isNotBlank()) { "檔案沒有可辨識的內容" }
+        val result = GeminiService.runAssistant(
+            """
+            你是嚴謹的英文文法教材圖片辨識與整理助手。先忠實讀取圖片或文件，再補齊成可學習的文法資料。
+            資料階層固定為：課程由 App 另行選擇；每篇 note 是一個文法類型；類型內有多組 patterns；每組 pattern 有多個 examples；questions 必須涵蓋這個類型的每一個例句。
+            依照圖片由上到下、由左到右整理。不同且可獨立學習的文法觀念必須拆成不同筆記。
+            只回傳 JSON 物件 {"notes":[...]}，不要 Markdown。每篇欄位：title, category, level, summary, commonMistakes, comparison, tags, patterns, questions。
+            patterns 每組包含 title, formula, meaning, usage, notes, examples；examples 包含 sentence, translation, highlightedText。
+            questions 每題包含 grammarPatternIndex, type, prompt, translation, answer, acceptedAnswers, options, explanation, difficulty；題目中以 {{answer}} 標記唯一答案位置。
+            圖片沒有題目時 questions 回傳空陣列；看不清楚的內容留空。
+            辨識模式：${when (mode) {
+                "ENRICH" -> "AI 補充：忠實保留原文，補齊自然例句、常見錯誤與練習題。每個例句至少要有一題，題目需涵蓋整個文法類型；補充題 sourceType 設為 AI。"
+                "ORGANIZE" -> "AI 整理：不可改變原意，可重整段落與欄位，並依原文建立題目。"
+                else -> "忠實擷取：只能使用文件確實存在的內容，不得補充例句、規則或題目。"
+            }}
+            """.trimIndent() + if (extractedText.isBlank()) "" else "\n\n文件文字：\n$extractedText",
+            payloads
+        )
+        val notes = result.optJSONArray("notes")
+        val drafts = if (notes == null) listOf(parseGrammarDraft(result)) else buildList {
+            for (index in 0 until notes.length()) {
+                val item = notes.optJSONObject(index) ?: continue
+                runCatching { parseGrammarDraft(item) }.getOrNull()?.let(::add)
+            }
+        }
+        require(drafts.isNotEmpty()) { "AI 沒有辨識到可匯入的文法" }
+        return drafts
+    }
+
+    private fun parseGrammarDraft(result: JSONObject): GrammarDraft {
+        fun value(name: String): String {
+            val raw = result.opt(name)
+            return when (raw) {
+                is JSONArray -> (0 until raw.length()).joinToString("\n") { raw.optString(it) }
+                else -> result.optString(name).trim()
+            }
+        }
+        val patternItems = result.optJSONArray("patterns") ?: JSONArray()
+        val patterns = buildList {
+            for (index in 0 until patternItems.length()) {
+                val item = patternItems.optJSONObject(index) ?: continue
+                val exampleItems = item.optJSONArray("examples") ?: JSONArray()
+                val examples = buildList {
+                    for (exampleIndex in 0 until exampleItems.length()) {
+                        val example = exampleItems.optJSONObject(exampleIndex) ?: continue
+                        val sentence = example.optString("sentence").trim()
+                        if (sentence.isNotBlank()) add(GrammarExampleDraft(
+                            sentence = sentence,
+                            translation = example.optString("translation").trim(),
+                            highlightedText = example.optString("highlightedText").trim()
+                        ))
+                    }
+                }
+                val pattern = GrammarPatternDraft(
+                    title = item.optString("title", "句型 ${index + 1}").trim(),
+                    formula = item.optString("formula").trim(),
+                    meaning = item.optString("meaning").trim(),
+                    usage = item.optString("usage").trim(),
+                    notes = item.optString("notes").trim(), examples = examples
+                )
+                if (pattern.formula.isNotBlank() || pattern.meaning.isNotBlank()) add(pattern)
+            }
+        }
+        val questionItems = result.optJSONArray("questions") ?: JSONArray()
+        val questions = buildList {
+            for (index in 0 until questionItems.length()) {
+                val item = questionItems.optJSONObject(index) ?: continue
+                fun qValue(name: String): String {
+                    val raw = item.opt(name)
+                    return if (raw is JSONArray) (0 until raw.length()).joinToString(",") { raw.optString(it) }
+                    else item.optString(name).trim()
+                }
+                val question = GrammarQuestionDraft(
+                    grammarPatternIndex = item.optInt("grammarPatternIndex", -1),
+                    type = qValue("type").ifBlank { "CLOZE_CHOICE" },
+                    prompt = qValue("prompt"), translation = qValue("translation"),
+                    answer = qValue("answer"), acceptedAnswers = qValue("acceptedAnswers"),
+                    options = qValue("options"), explanation = qValue("explanation"),
+                    difficulty = item.optInt("difficulty", 1).coerceIn(1, 3), sourceType = "AI"
+                )
+                if (question.prompt.isNotBlank() && question.answer.isNotBlank() && "{{answer}}" in question.prompt) add(question)
+            }
+        }
+        val draft = GrammarDraft(
+            title = value("title"),
+            category = value("category").ifBlank { "其他" },
+            level = value("level").ifBlank { "未分級" },
+            summary = value("summary"),
+            structure = value("structure"),
+            usage = value("usage"),
+            exampleSentence = value("exampleSentence"),
+            exampleTranslation = value("exampleTranslation"),
+            commonMistakes = value("commonMistakes"),
+            comparison = value("comparison"),
+            tags = value("tags").replace("\n", ","),
+            questionTemplate = value("questionTemplate"),
+            answer = value("answer"),
+            acceptedAnswers = value("acceptedAnswers").replace("\n", ","),
+            options = value("options").replace("\n", ","),
+            explanation = value("explanation"), patterns = patterns,
+            questions = questions
+        )
+        require(draft.title.isNotBlank()) { "AI 沒有回傳文法名稱" }
+        if (draft.questionTemplate.isNotBlank()) {
+            require("{{answer}}" in draft.questionTemplate) { "AI 題目缺少答案位置" }
+            require(draft.answer.isNotBlank()) { "AI 題目缺少答案" }
+        }
+        return draft
+    }
+
+    suspend fun recognizeGrammarWritingSources(uris: List<Uri>): GrammarWritingScanResult {
+        require(settings.value.aiEnabled) { "請先在設定中啟用 AI" }
+        require(uris.isNotEmpty()) { "請先選擇圖片或文件" }
+        val context = getApplication<Application>()
+        val payloads = buildList {
+            uris.take(10).forEach { uri ->
+                val mime = context.contentResolver.getType(uri).orEmpty()
+                if (mime.contains("pdf", true)) addAll(DocumentParser.renderPdfPagesForAi(context, uri, settings.value.pdfPageLimit))
+                else if (mime.startsWith("image/")) add(AiImagePreprocessor.prepare(context, uri))
+            }
+        }
+        val documentText = uris.take(10).mapNotNull { uri ->
+            val mime = context.contentResolver.getType(uri).orEmpty()
+            if (mime.startsWith("image/") || mime.contains("pdf", true)) null
+            else runCatching { DocumentParser.extractTextFromUri(context, uri, settings.value.pdfPageLimit) }.getOrNull()
+        }.filter(String::isNotBlank).joinToString("\n\n")
+        require(payloads.isNotEmpty() || documentText.isNotBlank()) { "檔案沒有可辨識的作文內容" }
+        val result = GeminiService.runAssistant(
+            """
+            你是嚴謹的英文作文辨識助手。依圖片或文件原始順序逐字擷取英文作文，保留段落、大小寫、拼字、標點與原本錯誤，不可先修正文法，不可猜測看不清楚的字。
+            只回傳 JSON：{"recognizedText":"完整原文","uncertainParts":["無法確定的原始片段"]}。
+            看不清楚處在 recognizedText 中以 [看不清楚] 標示。多張圖片依收到的順序合併。
+            """.trimIndent() + if (documentText.isBlank()) "" else "\n\n文件內容：\n$documentText",
+            payloads
+        )
+        return GrammarWritingScanResult(
+            recognizedText = result.optString("recognizedText").trim(),
+            uncertainParts = result.optJSONArray("uncertainParts")?.let { array ->
+                (0 until array.length()).mapNotNull { array.optString(it).trim().takeIf(String::isNotBlank) }
+            }.orEmpty()
+        ).also { require(it.recognizedText.isNotBlank()) { "AI 沒有辨識到英文作文" } }
+    }
+
+    suspend fun checkGrammarWriting(text: String): List<GrammarWritingIssue> {
+        require(text.isNotBlank()) { "請先輸入英文內容" }
+        require(settings.value.aiEnabled) { "請先在設定中啟用 AI" }
+        val result = GeminiService.runAssistant(
+            """
+            你是嚴謹的英文文法檢查助手。分析下方英文，只回報確定存在的文法錯誤；風格偏好或可接受變體不要當成錯誤。
+            只回傳 JSON 物件：{"issues":[{"ruleKey":"穩定的英文規則代碼","title":"繁體中文文法名稱","originalSentence":"原句","correctedSentence":"完整修正句","originalText":"錯誤片段","correctedText":"替換片段","explanation":"繁體中文原因"}]}。
+            originalText 必須逐字存在於 originalSentence；correctedText 必須逐字存在於 correctedSentence。沒有可靠錯誤就回傳空陣列。
+
+            待檢查內容：
+            $text
+            """.trimIndent()
+        )
+        val items = result.optJSONArray("issues") ?: JSONArray()
+        return buildList {
+            for (index in 0 until items.length()) {
+                val item = items.optJSONObject(index) ?: continue
+                val issue = GrammarWritingIssue(
+                    ruleKey = item.optString("ruleKey").trim(), title = item.optString("title").trim(),
+                    originalSentence = item.optString("originalSentence").trim(),
+                    correctedSentence = item.optString("correctedSentence").trim(),
+                    originalText = item.optString("originalText").trim(), correctedText = item.optString("correctedText").trim(),
+                    explanation = item.optString("explanation").trim()
+                )
+                if (issue.ruleKey.isNotBlank() && issue.title.isNotBlank() &&
+                    issue.originalText in issue.originalSentence && issue.correctedText in issue.correctedSentence
+                ) add(issue)
+            }
+        }.distinctBy { "${it.ruleKey}|${it.originalSentence}" }
+    }
+
+    fun acceptGrammarWritingIssue(issue: GrammarWritingIssue, onComplete: (Long) -> Unit = {}) {
+        viewModelScope.launch {
+            runCatching {
+                db.withTransaction {
+                    val existingNote = db.grammarNoteDao().getAllOnce().firstOrNull {
+                        it.title.equals(issue.title, ignoreCase = true)
+                    }
+                    val noteId = existingNote?.id ?: db.grammarNoteDao().insert(
+                        GrammarNote(
+                            course = "寫作弱點", title = issue.title,
+                            summary = issue.explanation, commonMistakes = "${issue.originalText} → ${issue.correctedText}",
+                            sourceType = "WRITING_CHECK"
+                        )
+                    )
+                    val oldWeakness = db.grammarQuestionDao().getWeakness(issue.ruleKey)
+                    if (oldWeakness == null) db.grammarQuestionDao().insertWeakness(
+                        GrammarWeakness(
+                            ruleKey = issue.ruleKey, grammarNoteId = noteId, title = issue.title,
+                            originalText = issue.originalText, correctedText = issue.correctedText,
+                            explanation = issue.explanation
+                        )
+                    ) else db.grammarQuestionDao().updateWeakness(
+                        oldWeakness.copy(
+                            grammarNoteId = noteId, originalText = issue.originalText,
+                            correctedText = issue.correctedText, explanation = issue.explanation,
+                            occurrenceCount = oldWeakness.occurrenceCount + 1,
+                            lastOccurredAt = System.currentTimeMillis()
+                        )
+                    )
+                    val prompt = issue.correctedSentence.replaceFirst(issue.correctedText, "{{answer}}")
+                    if ("{{answer}}" in prompt && db.grammarQuestionDao().getForNote(noteId).none { it.prompt == prompt }) {
+                        db.grammarQuestionDao().insertQuestion(
+                            GrammarQuestion(
+                                grammarNoteId = noteId, type = "CLOZE_INPUT", prompt = prompt,
+                                answer = issue.correctedText, explanation = issue.explanation,
+                                sourceType = "WRITING_CHECK"
+                            )
+                        )
+                    }
+                    noteId
+                }
+            }.onSuccess(onComplete).onFailure {
+                _dataMessage.value = "建立弱點練習失敗：${it.message ?: "未知錯誤"}"
+            }
+        }
+    }
+
     fun moveCard(card: Flashcard, direction: Int) {
         if (direction !in setOf(-1, 1)) return
         viewModelScope.launch {
@@ -265,7 +942,10 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
     fun renameCourse(oldName: String, newName: String, onComplete: (Boolean) -> Unit = {}) {
         viewModelScope.launch {
             val success = runCatching {
-                repository.renameCourse(oldName, newName)
+                db.withTransaction {
+                    repository.renameCourse(oldName, newName)
+                    db.grammarNoteDao().renameCourse(oldName.trim(), newName.trim(), System.currentTimeMillis())
+                }
             }.isSuccess
             onComplete(success)
         }
@@ -766,6 +1446,11 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
         viewModelScope.launch {
             runCatching {
                 repository.clearAllData()
+                db.grammarQuestionDao().deleteAllQuestions()
+                db.grammarQuestionDao().deleteAllWeaknesses()
+                db.grammarContentDao().deleteAllExamples()
+                db.grammarContentDao().deleteAllPatterns()
+                db.grammarNoteDao().deleteAll()
                 settingsRepository.resetAfterDataClear()
                 aiCredentialsStore.clear()
                 learningSessionStore.clearAll()
