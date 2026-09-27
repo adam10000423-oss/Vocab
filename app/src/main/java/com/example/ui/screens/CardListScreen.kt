@@ -39,7 +39,6 @@ import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.DriveFileMove
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
@@ -87,7 +86,6 @@ import com.example.data.entity.Deck
 import com.example.data.entity.Flashcard
 import com.example.ui.components.AddFolderDialog
 import com.example.ui.components.CalmEmptyState
-import com.example.ui.components.PronunciationPracticeDialog
 import com.example.ui.components.rememberResponsiveLayout
 import com.example.util.OcrWordParser
 import kotlinx.coroutines.launch
@@ -145,17 +143,6 @@ fun CardListScreen(
     var showBulkDeleteConfirm by remember { mutableStateOf(false) }
     var showMoveCardsDialog by remember { mutableStateOf(false) }
     var showCreateMoveFolderDialog by remember { mutableStateOf(false) }
-    var pronunciationCard by remember { mutableStateOf<Flashcard?>(null) }
-
-    pronunciationCard?.let { card ->
-        PronunciationPracticeDialog(
-            card = card,
-            onSpeak = onSpeak,
-            onStopSpeaking = onStopSpeaking,
-            onResult = { score -> onPronunciationResult(card.id, score) },
-            onDismiss = { pronunciationCard = null }
-        )
-    }
 
     val activeDeck = decks.firstOrNull { it.id == selectedDeckId }
     LaunchedEffect(selectedDeckId) {
@@ -741,7 +728,7 @@ fun CardListScreen(
                                 onDeleteCard = { onDeleteCard(card) },
                                 onEditCard = { onEditCard(card) },
                                 onSpeak = { onSpeak(card.word) },
-                                onPracticePronunciation = { pronunciationCard = card },
+                                onPracticePronunciation = {},
                                 showReorder = dragReorderEnabled,
                                 dragHandleModifier = Modifier.draggableHandle()
                             )
@@ -863,9 +850,6 @@ private fun CardListItem(
                 }
                 IconButton(onClick = onSpeak) {
                     Icon(imageVector = Icons.AutoMirrored.Filled.VolumeUp, contentDescription = "發音", tint = MaterialTheme.colorScheme.primary)
-                }
-                IconButton(onClick = onPracticePronunciation) {
-                    Icon(imageVector = Icons.Default.Mic, contentDescription = "發音練習", tint = MaterialTheme.colorScheme.primary)
                 }
                 IconButton(onClick = onToggleFavorite) {
                     Icon(

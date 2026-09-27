@@ -14,10 +14,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -27,6 +29,8 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
@@ -40,6 +44,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -68,6 +73,7 @@ import com.example.data.importer.ExternalDeckImporter
 import com.example.data.importer.ExternalVocabularySource
 import com.example.data.importer.ExternalSearchResult
 import com.example.data.importer.ImportCapability
+import com.example.ui.components.ImportDestinationSelector
 import kotlinx.coroutines.launch
 
 private enum class ExternalImportMode(val label: String) {
@@ -92,6 +98,11 @@ fun ExternalImportScreen(
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
+    val publicSources = remember {
+        ExternalDeckImporter.sources.filter {
+            it.capability == ImportCapability.PUBLIC_SHARE_PAGE && it.id != "studysmarter"
+        }
+    }
     var mode by remember { mutableStateOf(ExternalImportMode.URL) }
     var selectedDeckId by remember(decks, initialDeckId) {
         mutableStateOf(
@@ -99,7 +110,7 @@ fun ExternalImportScreen(
                 ?: decks.firstOrNull()?.id
         )
     }
-    var selectedSource by remember { mutableStateOf(ExternalDeckImporter.sources.first()) }
+    var selectedSource by remember { mutableStateOf(publicSources.first()) }
     var searchQuery by remember { mutableStateOf("") }
     var sourceMenuExpanded by remember { mutableStateOf(false) }
     var searchResults by remember { mutableStateOf<List<ExternalSearchResult>>(emptyList()) }
@@ -113,6 +124,7 @@ fun ExternalImportScreen(
     var aiFormattingEnabled by remember(aiAvailable) { mutableStateOf(aiAvailable) }
     var aiPrepared by remember { mutableStateOf(false) }
     val candidates = remember { mutableStateListOf<ExternalCardCandidate>() }
+    val listState = rememberLazyListState()
 
     fun showParsed(title: String, source: String, cards: List<ExternalCardCandidate>) {
         candidates.clear()
@@ -156,12 +168,10 @@ fun ExternalImportScreen(
             )
         }
     ) { innerPadding ->
+        Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(top = 6.dp)
-                .padding(horizontal = 16.dp),
+            state = listState,
+            modifier = Modifier.fillMaxSize().padding(top = 6.dp).padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
@@ -172,15 +182,11 @@ fun ExternalImportScreen(
                         color = MaterialTheme.colorScheme.error
                     )
                 } else {
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(decks) { deck ->
-                            FilterChip(
-                                selected = selectedDeckId == deck.id,
-                                onClick = { selectedDeckId = deck.id },
-                                label = { Text(deck.name, maxLines = 1) }
-                            )
-                        }
-                    }
+                    ImportDestinationSelector(
+                        decks = decks,
+                        selectedDeckId = selectedDeckId,
+                        onDeckSelected = { selectedDeckId = it }
+                    )
                 }
             }
 
@@ -289,7 +295,7 @@ fun ExternalImportScreen(
                                 expanded = sourceMenuExpanded,
                                 onDismissRequest = { sourceMenuExpanded = false }
                             ) {
-                                ExternalDeckImporter.sources.forEach { source ->
+                                publicSources.forEach { source ->
                                     DropdownMenuItem(
                                         text = { Text(source.name) },
                                         onClick = {
@@ -549,6 +555,15 @@ fun ExternalImportScreen(
                                 style = MaterialTheme.typography.labelSmall
                             )
                         }
+                        FloatingActionButton(
+                            onClick = {
+                                scope.launch {
+                                    val last = (listState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0)
+                                    listState.animateScrollToItem(minOf(6, last))
+                                }
+                            },
+                            modifier = Modifier.size(42.dp)
+                        ) { Icon(Icons.Default.KeyboardArrowUp, "回到第一個單字") }
                         OutlinedButton(onClick = {
                             val shouldSelect = candidates.any { !it.selected }
                             candidates.indices.forEach { index ->
@@ -664,6 +679,17 @@ fun ExternalImportScreen(
                     Spacer(Modifier.height(32.dp))
                 }
             }
+        }
+        if (candidates.isNotEmpty()) {
+            FloatingActionButton(
+                onClick = {
+                    scope.launch {
+                        listState.animateScrollToItem((listState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0))
+                    }
+                },
+                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 12.dp)
+            ) { Icon(Icons.Default.KeyboardArrowDown, "前往最下面") }
+        }
         }
     }
 }

@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -47,6 +48,9 @@ fun VocabularyQualityScreen(
     decks: List<Deck>,
     onEditCard: (Flashcard) -> Unit,
     onRunAiAudit: () -> Unit,
+    aiRunning: Boolean = false,
+    aiStatus: String? = null,
+    aiReport: String? = null,
     onBack: () -> Unit
 ) {
     val deckNames = remember(decks) { decks.associate { it.id to it.name } }
@@ -80,9 +84,10 @@ fun VocabularyQualityScreen(
                             else "找到 ${findings.size} 個需要確認的項目。",
                             color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
-                        Button(onClick = onRunAiAudit, modifier = Modifier.fillMaxWidth(), enabled = cards.isNotEmpty()) {
-                            Icon(Icons.Default.AutoAwesome, contentDescription = null)
-                            Text("用 AI 檢查解釋與疑似拼字")
+                        Button(onClick = onRunAiAudit, modifier = Modifier.fillMaxWidth(), enabled = cards.isNotEmpty() && !aiRunning) {
+                            if (aiRunning) CircularProgressIndicator(modifier = Modifier.padding(3.dp))
+                            else Icon(Icons.Default.AutoAwesome, contentDescription = null)
+                            Text(if (aiRunning) "檢查中…" else "用 AI 檢查解釋與疑似拼字")
                         }
                     }
                 }
@@ -93,6 +98,25 @@ fun VocabularyQualityScreen(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+            if (aiRunning || !aiReport.isNullOrBlank()) {
+                item {
+                    Card(
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("AI 檢查結果", fontWeight = FontWeight.Bold)
+                            if (aiRunning) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    CircularProgressIndicator()
+                                    Text(aiStatus ?: "AI 正在檢查單字資料…")
+                                }
+                            } else Text(aiReport.orEmpty())
+                        }
+                    }
+                }
             }
             if (findings.isEmpty()) {
                 item {

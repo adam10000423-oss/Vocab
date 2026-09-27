@@ -48,6 +48,7 @@ data class AppSettings(
     val ttsVoiceStyle: String = "NATURAL",
     val ttsVoiceName: String = "",
     val ttsReadWord: Boolean = true,
+    val ttsSpellWord: Boolean = false,
     val ttsReadDefinition: Boolean = true,
     val ttsReadPhonetic: Boolean = true,
     val ttsReadPartOfSpeech: Boolean = true,

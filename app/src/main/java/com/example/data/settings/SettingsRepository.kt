@@ -51,6 +51,7 @@ class SettingsRepository(private val context: Context) {
         val ttsVoiceStyle = stringPreferencesKey("tts_voice_style")
         val ttsVoiceName = stringPreferencesKey("tts_voice_name")
         val ttsReadWord = booleanPreferencesKey("tts_read_word")
+        val ttsSpellWord = booleanPreferencesKey("tts_spell_word")
         val ttsReadDefinition = booleanPreferencesKey("tts_read_definition")
         val ttsReadPhonetic = booleanPreferencesKey("tts_read_phonetic")
         val ttsReadPartOfSpeech = booleanPreferencesKey("tts_read_part_of_speech")
@@ -118,6 +119,7 @@ class SettingsRepository(private val context: Context) {
             ttsVoiceStyle = value[Keys.ttsVoiceStyle] ?: "NATURAL",
             ttsVoiceName = value[Keys.ttsVoiceName] ?: "",
             ttsReadWord = value[Keys.ttsReadWord] ?: true,
+            ttsSpellWord = value[Keys.ttsSpellWord] ?: false,
             ttsReadDefinition = value[Keys.ttsReadDefinition] ?: true,
             ttsReadPhonetic = value[Keys.ttsReadPhonetic] ?: true,
             ttsReadPartOfSpeech = value[Keys.ttsReadPartOfSpeech] ?: true,
@@ -146,6 +148,7 @@ class SettingsRepository(private val context: Context) {
             "ocrPreviewBeforeImport" -> Keys.ocrPreviewBeforeImport
             "autoSpeak" -> Keys.autoSpeak
             "ttsReadWord" -> Keys.ttsReadWord
+            "ttsSpellWord" -> Keys.ttsSpellWord
             "ttsReadDefinition" -> Keys.ttsReadDefinition
             "ttsReadPhonetic" -> Keys.ttsReadPhonetic
             "ttsReadPartOfSpeech" -> Keys.ttsReadPartOfSpeech

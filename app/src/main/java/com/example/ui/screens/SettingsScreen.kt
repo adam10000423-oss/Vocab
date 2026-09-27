@@ -867,6 +867,7 @@ fun SettingsScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     SettingSwitch("英文單字", settings.ttsReadWord) { onBooleanChange("ttsReadWord", it) }
+                    SettingSwitch("拼音（逐字母拼讀）", settings.ttsSpellWord) { onBooleanChange("ttsSpellWord", it) }
                     SettingSwitch("中文解釋", settings.ttsReadDefinition) { onBooleanChange("ttsReadDefinition", it) }
                     SettingSwitch("音標", settings.ttsReadPhonetic) { onBooleanChange("ttsReadPhonetic", it) }
                     SettingSwitch("詞性", settings.ttsReadPartOfSpeech) { onBooleanChange("ttsReadPartOfSpeech", it) }

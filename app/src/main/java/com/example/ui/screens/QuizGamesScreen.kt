@@ -1,6 +1,15 @@
 package com.example.ui.screens
 
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Bundle
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.keyframes
@@ -37,6 +46,9 @@ import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Replay
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Style
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material3.AlertDialog
@@ -74,6 +86,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.focus.FocusRequester
@@ -91,6 +104,9 @@ import androidx.compose.ui.unit.TextUnit
 import com.example.data.entity.Deck
 import com.example.data.entity.Flashcard
 import com.example.ui.components.CalmEmptyState
+import com.example.util.pronunciationScore
+import androidx.core.content.ContextCompat
+import java.util.Locale
 import kotlinx.coroutines.delay
 
 private enum class QuizPlayMode(val label: String) {
@@ -104,6 +120,8 @@ private enum class QuizPlayMode(val label: String) {
     SENTENCE_ORDER("句子重組"),
     PART_OF_SPEECH("詞性選擇"),
     SYNONYM_DISCRIMINATION("近義字辨析"),
+    PRONOUNCE_WORD("念單字"),
+    PRONOUNCE_SENTENCE("念例句"),
     MATCH("配對")
 }
 
@@ -121,6 +139,7 @@ fun QuizGamesScreen(
     onSpeak: (String) -> Unit = {},
     onStopSpeaking: () -> Unit = {},
     onWrongAnswer: (Flashcard) -> Unit = {},
+    onPronunciationResult: (Long, Int) -> Unit = { _, _ -> },
     onGameActiveChange: (Boolean) -> Unit = {},
     onBack: (() -> Unit)? = null,
     onOpenAssistant: () -> Unit = {},
@@ -262,6 +281,18 @@ fun QuizGamesScreen(
                             cards = deckCards,
                             wrongCardsPool = emptyList(),
                             onAddWrongCard = onWrongAnswer
+                        )
+                        QuizPlayMode.PRONOUNCE_WORD, QuizPlayMode.PRONOUNCE_SENTENCE -> PronunciationQuizView(
+                            cards = eligibleCardsForMode(requireNotNull(selectedPlayMode), deckCards),
+                            sentenceMode = selectedPlayMode == QuizPlayMode.PRONOUNCE_SENTENCE,
+                            onSpeak = onSpeak,
+                            onStopSpeaking = onStopSpeaking,
+                            onResult = onPronunciationResult,
+                            onFinish = {
+                                onStopSpeaking()
+                                activeGameDeckIds = emptySet()
+                                selectedPlayMode = null
+                            }
                         )
                         null -> Unit
                         else -> IndependentQuizView(
@@ -529,6 +560,168 @@ private fun nearMeaningCards(card: Flashcard, cards: List<Flashcard>): List<Flas
             areMeaningRelated(card, other)
     }
 
+@Composable
+private fun PronunciationQuizView(
+    cards: List<Flashcard>,
+    sentenceMode: Boolean,
+    onSpeak: (String) -> Unit,
+    onStopSpeaking: () -> Unit,
+    onResult: (Long, Int) -> Unit,
+    onFinish: () -> Unit
+) {
+    if (cards.isEmpty()) {
+        CalmEmptyState(Icons.Default.Mic, "沒有可練習的內容", if (sentenceMode) "請先補上英文例句。" else "請先新增單字。")
+        return
+    }
+    val context = LocalContext.current
+    var index by remember { mutableIntStateOf(0) }
+    var listening by remember(index) { mutableStateOf(false) }
+    var recognized by remember(index) { mutableStateOf("") }
+    var score by remember(index) { mutableStateOf<Int?>(null) }
+    var feedback by remember(index) { mutableStateOf("先聽一次示範，再按錄音開始作答。") }
+    val card = cards[index.coerceIn(0, cards.lastIndex)]
+    val target = if (sentenceMode) card.exampleSentence.trim() else card.word.trim()
+    val recognizer = remember(context, index) {
+        if (SpeechRecognizer.isRecognitionAvailable(context)) SpeechRecognizer.createSpeechRecognizer(context) else null
+    }
+
+    fun startListening() {
+        if (recognizer == null) {
+            feedback = "此裝置沒有可用的 Android 語音辨識服務。"
+            return
+        }
+        onStopSpeaking()
+        score = null
+        recognized = ""
+        feedback = "正在錄音，念完後按停止並評分。"
+        recognizer.startListening(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.US.toLanguageTag())
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
+        })
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            startListening()
+        } else {
+            feedback = "需要麥克風權限才能進行口說測驗。"
+        }
+    }
+
+    fun requestStart() {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            startListening()
+        } else {
+            permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
+    DisposableEffect(recognizer, target) {
+        recognizer?.setRecognitionListener(object : RecognitionListener {
+            override fun onReadyForSpeech(params: Bundle?) { listening = true }
+            override fun onBeginningOfSpeech() = Unit
+            override fun onRmsChanged(rmsdB: Float) = Unit
+            override fun onBufferReceived(buffer: ByteArray?) = Unit
+            override fun onEndOfSpeech() { listening = false; feedback = "正在評分…" }
+            override fun onError(error: Int) {
+                listening = false
+                feedback = when (error) {
+                    SpeechRecognizer.ERROR_NO_MATCH -> "沒有辨識到完整內容，請再試一次。"
+                    SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "沒有聽到聲音，請再試一次。"
+                    else -> "語音辨識暫時失敗，請確認網路與系統語音服務。"
+                }
+            }
+            override fun onResults(results: Bundle?) {
+                listening = false
+                val heard = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
+                val confidence = results?.getFloatArray(SpeechRecognizer.CONFIDENCE_SCORES)?.firstOrNull()
+                val calculated = if (sentenceMode) spokenPhraseScore(target, heard, confidence)
+                else pronunciationScore(target, heard, confidence)
+                recognized = heard
+                score = calculated
+                feedback = if (calculated >= 80) "通過，可以前往下一題。" else "尚未通過，請再聽一次並重新錄音。"
+                onResult(card.id, calculated)
+            }
+            override fun onPartialResults(partialResults: Bundle?) = Unit
+            override fun onEvent(eventType: Int, params: Bundle?) = Unit
+        })
+        onDispose { runCatching { recognizer?.cancel() }; runCatching { recognizer?.destroy() } }
+    }
+
+    LaunchedEffect(card.id, sentenceMode) {
+        onStopSpeaking()
+        delay(250)
+        onSpeak(target)
+    }
+
+    Column(
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Text("${if (sentenceMode) "念例句" else "念單字"} · ${index + 1} / ${cards.size}", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+        Card(
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(target, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                if (!sentenceMode && card.phonetic.isNotBlank()) Text(card.phonetic, color = MaterialTheme.colorScheme.primary)
+                Text(if (sentenceMode) card.exampleTranslation else card.definition, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        score?.let {
+            Text("$it 分 · ${if (it >= 80) "通過" else "再試一次"}", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold,
+                color = if (it >= 80) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
+        }
+        if (recognized.isNotBlank()) Text("辨識結果：$recognized")
+        Text(feedback, textAlign = TextAlign.Center)
+        Button(
+            onClick = { if (listening) recognizer?.stopListening() else requestStart() },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(if (listening) Icons.Default.Stop else Icons.Default.Mic, null)
+            Text(if (listening) "停止並評分" else "開始錄音")
+        }
+        if (score != null) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { onStopSpeaking(); onSpeak(target) }, modifier = Modifier.weight(1f)) {
+                    Icon(Icons.Default.Replay, null); Text("再念一次")
+                }
+                Button(
+                    onClick = { if (index == cards.lastIndex) onFinish() else index++ },
+                    modifier = Modifier.weight(1f)
+                ) { Text(if (index == cards.lastIndex) "完成" else "下一題") }
+            }
+        }
+    }
+}
+
+private fun spokenPhraseScore(target: String, heard: String, confidence: Float?): Int {
+    val expected = target.lowercase().filter(Char::isLetterOrDigit)
+    val actual = heard.lowercase().filter(Char::isLetterOrDigit)
+    if (expected.isBlank() || actual.isBlank()) return 0
+    var previous = IntArray(actual.length + 1) { it }
+    expected.forEachIndexed { row, expectedChar ->
+        val current = IntArray(actual.length + 1)
+        current[0] = row + 1
+        actual.forEachIndexed { column, actualChar ->
+            current[column + 1] = minOf(
+                current[column] + 1,
+                previous[column + 1] + 1,
+                previous[column] + if (expectedChar == actualChar) 0 else 1
+            )
+        }
+        previous = current
+    }
+    val similarity = (1f - previous.last().toFloat() / maxOf(expected.length, actual.length, 1)).coerceIn(0f, 1f)
+    val confidenceValue = confidence?.takeIf { it >= 0f }?.coerceIn(0f, 1f) ?: similarity
+    return (similarity * 85 + confidenceValue * 15).toInt().coerceIn(0, 100)
+}
+
 private fun eligibleCardsForMode(
     mode: QuizPlayMode,
     cards: List<Flashcard>
@@ -556,6 +749,8 @@ private fun eligibleCardsForMode(
         QuizPlayMode.SYNONYM_DISCRIMINATION -> realCards.filter {
             it.definition.isNotBlank() && nearMeaningCards(it, realCards).isNotEmpty()
         }
+        QuizPlayMode.PRONOUNCE_WORD -> realCards
+        QuizPlayMode.PRONOUNCE_SENTENCE -> realCards.filter { it.exampleSentence.isNotBlank() }
         QuizPlayMode.MATCH -> if (realCards.size >= 2) realCards else emptyList()
     }
 }
@@ -806,6 +1001,8 @@ private fun IndependentQuizView(
                     horizontalAlignment = if (isListening) Alignment.CenterHorizontally else Alignment.Start
                 ) {
                     when (mode) {
+                        QuizPlayMode.PRONOUNCE_WORD,
+                        QuizPlayMode.PRONOUNCE_SENTENCE -> Unit
                         QuizPlayMode.CHINESE_TO_ENGLISH,
                         QuizPlayMode.CHINESE_TYPE_ENGLISH -> {
                             Text("中文提示", color = MaterialTheme.colorScheme.primary)

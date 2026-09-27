@@ -1040,6 +1040,10 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
         val value = settings.value
         val segments = buildList {
             if (value.ttsReadWord) add(SpeechSegment(card.word, "en-US"))
+            if (value.ttsSpellWord) {
+                val spelling = card.word.filter(Char::isLetter).uppercase().toCharArray().joinToString(", ")
+                if (spelling.isNotBlank()) add(SpeechSegment(spelling, "en-US"))
+            }
             if (value.ttsReadDefinition && card.definition.isNotBlank()) {
                 add(SpeechSegment(card.definition, "zh-TW"))
             }

@@ -18,7 +18,6 @@ import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
-import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -51,7 +50,6 @@ import com.example.data.assistant.AssistantMessage
 import com.example.data.entity.Flashcard
 import com.example.data.entity.Deck
 import com.example.ui.components.AddFolderDialog
-import com.example.ui.components.PronunciationPracticeDialog
 import org.json.JSONObject
 
 private data class ReadingTranslation(val sentence: String, val translation: String)
@@ -90,7 +88,6 @@ fun InteractiveReadingScreen(
     }
     var showTranslations by remember { mutableStateOf(false) }
     var selectedCard by remember { mutableStateOf<Flashcard?>(null) }
-    var pronunciationCard by remember { mutableStateOf<Flashcard?>(null) }
     var quizMode by remember { mutableStateOf(false) }
     var questionIndex by remember { mutableIntStateOf(0) }
     var selectedOption by remember { mutableIntStateOf(-1) }
@@ -174,10 +171,6 @@ fun InteractiveReadingScreen(
                             Icon(Icons.AutoMirrored.Filled.VolumeUp, null)
                             Text("發音")
                         }
-                        OutlinedButton(onClick = { pronunciationCard = card }, modifier = Modifier.weight(1f)) {
-                            Icon(Icons.Default.Mic, null)
-                            Text("練習")
-                        }
                     }
                     OutlinedButton(onClick = { cardToAdd = card }, modifier = Modifier.fillMaxWidth()) {
                         Icon(Icons.Default.Folder, null)
@@ -190,15 +183,6 @@ fun InteractiveReadingScreen(
             },
             confirmButton = { Button(onClick = { showBack = !showBack }) { Text(if (showBack) "看正面" else "翻面") } },
             dismissButton = { TextButton(onClick = { onStopSpeaking(); selectedCard = null }) { Text("關閉") } }
-        )
-    }
-    pronunciationCard?.let { card ->
-                        PronunciationPracticeDialog(
-            card = card,
-            onSpeak = onSpeak,
-            onStopSpeaking = onStopSpeaking,
-            onResult = { onPronunciationResult(card.id, it) },
-            onDismiss = { pronunciationCard = null }
         )
     }
 

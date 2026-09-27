@@ -40,6 +40,8 @@ import com.example.ui.screens.AiAssistantScreen
 import com.example.ui.screens.StudyCalendarScreen
 import com.example.ui.screens.VocabularyQualityScreen
 import com.example.ui.screens.WordLookupScreen
+import com.example.ui.screens.InteractiveReadingScreen
+import com.example.ui.screens.AiGenerationLoadingScreen
 import com.example.viewmodel.VocabularyViewModel
 import com.example.util.GitHubUpdateManager
 import com.example.util.UpdateCheckResult
@@ -57,6 +59,7 @@ object Routes {
     const val STUDY_CALENDAR = "study_calendar"
     const val QUALITY_CHECK = "quality_check"
     const val WORD_LOOKUP = "word_lookup"
+    const val GENERATED_READING = "generated_reading"
 }
 
 @Composable
@@ -105,6 +108,8 @@ fun VocabApp(
     var reviewScopeId by remember { mutableStateOf(0L) }
     var quizGameActive by remember { mutableStateOf(false) }
     var updateAvailable by remember { mutableStateOf(false) }
+    var readingStartedAt by remember { mutableStateOf(0L) }
+    var auditStartedAt by remember { mutableStateOf(0L) }
     val updateCheckScope = rememberCoroutineScope()
     val appContext = LocalContext.current.applicationContext
 
@@ -218,8 +223,9 @@ fun VocabApp(
                         onOpenExternalImport = { navController.navigate(Routes.EXTERNAL_IMPORT) },
                         onStartInteractiveReading = { deckId ->
                             val deckName = decks.firstOrNull { it.id == deckId }?.name ?: "指定資料夾"
+                            readingStartedAt = System.currentTimeMillis()
                             viewModel.openAssistant(deckId)
-                            navController.navigate(Routes.AI_ASSISTANT) { launchSingleTop = true }
+                            navController.navigate(Routes.GENERATED_READING) { launchSingleTop = true }
                             viewModel.sendAssistantMessage(
                                 "請根據資料夾「$deckName」產生一篇自然的互動閱讀文章，盡量使用資料夾內的目標單字，並附完整繁體中文翻譯、逐句翻譯與 5 題閱讀測驗。"
                             )
@@ -330,6 +336,7 @@ fun VocabApp(
                         onWrongAnswer = { card ->
                             if (settings.gameMistakesToReview) viewModel.recordGameMistake(card)
                         },
+                        onPronunciationResult = viewModel::recordPronunciationResult,
                         onGameActiveChange = { quizGameActive = it },
                         onOpenAssistant = {
                             viewModel.openAssistant(null)
@@ -398,8 +405,10 @@ fun VocabApp(
         composable(Routes.WORD_LOOKUP) {
             WordLookupScreen(
                 decks = decks,
+                cards = allCards,
                 onBack = { navController.popBackStack() },
                 onLookup = viewModel::lookupGoogleTranslate,
+                onAiComplete = viewModel::fetchAiWordDetails,
                 onAddToDeck = viewModel::addDictionaryEntryToDeck,
                 onCreateFolderAndAdd = viewModel::createFolderAndAddDictionaryEntry
             )
@@ -445,6 +454,36 @@ fun VocabApp(
             )
         }
 
+        composable(Routes.GENERATED_READING) {
+            val article = assistantMessages.lastOrNull {
+                it.role == "ASSISTANT" && it.kind == "ARTICLE" && it.createdAt >= readingStartedAt
+            }
+            if (article == null) {
+                val failure = assistantMessages.lastOrNull {
+                    it.role == "ASSISTANT" && it.createdAt >= readingStartedAt && it.kind != "ARTICLE"
+                }?.content?.takeIf { !assistantBusy }
+                AiGenerationLoadingScreen(
+                    title = "文章閱讀",
+                    status = assistantStatus ?: "AI 正在根據資料夾產生文章…",
+                    error = failure,
+                    onBack = { viewModel.stopAssistantRequest(); navController.popBackStack() }
+                )
+            } else {
+                InteractiveReadingScreen(
+                    message = article,
+                    cards = allCards,
+                    decks = decks,
+                    onSpeak = viewModel::speakText,
+                    onStopSpeaking = viewModel::stopSpeaking,
+                    onPronunciationResult = viewModel::recordPronunciationResult,
+                    onReadingMistake = viewModel::recordReadingMistake,
+                    onCopyCardToDeck = viewModel::copyCardToDeck,
+                    onCreateFolderAndCopyCard = viewModel::createFolderAndCopyCard,
+                    onBack = { navController.popBackStack() }
+                )
+            }
+        }
+
         composable(Routes.STUDY_CALENDAR) {
             StudyCalendarScreen(
                 logs = logs,
@@ -464,12 +503,17 @@ fun VocabApp(
                     navController.navigate(Routes.ADD_EDIT_CARD)
                 },
                 onRunAiAudit = {
+                    auditStartedAt = System.currentTimeMillis()
                     viewModel.openAssistant(null)
-                    navController.navigate(Routes.AI_ASSISTANT) { launchSingleTop = true }
                     viewModel.sendAssistantMessage(
                         "請對我的單字庫執行完整資料品質檢查，特別檢查疑似拼字錯誤與中文解釋是否可疑；只回報有可靠依據的問題，不確定時請明確標示並不要直接修改。"
                     )
                 },
+                aiRunning = assistantBusy && auditStartedAt > 0,
+                aiStatus = assistantStatus,
+                aiReport = if (auditStartedAt > 0) assistantMessages.lastOrNull {
+                    it.role == "ASSISTANT" && it.createdAt >= auditStartedAt
+                }?.content else null,
                 onBack = { navController.popBackStack() }
             )
         }
@@ -620,7 +664,6 @@ fun VocabApp(
                 aiAvailable = settings.aiEnabled &&
                     settings.usePersonalAiApi &&
                     apiKeyConfigured,
-                onParseText = viewModel::parseOcrPhotoText,
                 onImportCandidates = { candidates, deckId ->
                     viewModel.importOcrCandidates(candidates, deckId)
                     navController.popBackStack()

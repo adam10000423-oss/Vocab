@@ -8,9 +8,9 @@ import androidx.activity.result.IntentSenderRequest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,29 +21,28 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -69,6 +68,7 @@ import com.example.util.DocumentParser
 import com.example.util.OcrCardCandidate
 import com.example.util.OcrWordParser
 import com.example.ui.components.rememberResponsiveLayout
+import com.example.ui.components.ImportDestinationSelector
 import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
@@ -89,7 +89,6 @@ fun PhotoOcrScreen(
     decks: List<Deck>,
     candidates: List<OcrCardCandidate>,
     initialDeckId: Long? = null,
-    onParseText: (String, Long) -> Unit,
     onImportCandidates: (List<OcrCardCandidate>, Long) -> Unit,
     onBack: () -> Unit,
     aiAvailable: Boolean = false,
@@ -98,7 +97,6 @@ fun PhotoOcrScreen(
 ) {
     val responsive = rememberResponsiveLayout()
     val context = LocalContext.current
-    var rawInputText by remember { mutableStateOf("") }
     var selectedDeckId by remember(decks, initialDeckId) {
         mutableStateOf(
             initialDeckId?.takeIf { requestedId -> decks.any { it.id == requestedId } }
@@ -109,6 +107,7 @@ fun PhotoOcrScreen(
     var isScannerLaunching by remember { mutableStateOf(false) }
     var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
     var isAiEnriching by remember { mutableStateOf(false) }
+    var recognitionProgress by remember { mutableStateOf("") }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
@@ -124,11 +123,12 @@ fun PhotoOcrScreen(
 
     val processScannedUri: (Uri, String) -> Unit = { uri, source ->
         isOcrScanning = true
+        recognitionProgress = "正在辨識 1 / 1 張"
         coroutineScope.launch {
             runCatching { DocumentParser.parseDocumentToCards(context, uri, pdfPageLimit) }
                 .onSuccess { (text, parsed) ->
                     isOcrScanning = false
-                    rawInputText = text
+                    recognitionProgress = ""
                     localCandidates.clear()
                     localCandidates.addAll(parsed)
                     snackbarHostState.showSnackbar(
@@ -141,6 +141,7 @@ fun PhotoOcrScreen(
                 }
                 .onFailure {
                     isOcrScanning = false
+                    recognitionProgress = ""
                     snackbarHostState.showSnackbar("${source}失敗：${it.message ?: "無法讀取內容"}")
                 }
         }
@@ -157,20 +158,23 @@ fun PhotoOcrScreen(
         if (selectedUris.isEmpty()) return@processImages
 
         isOcrScanning = true
+        recognitionProgress = "正在辨識 0 / ${selectedUris.size} 張"
         coroutineScope.launch {
             runCatching {
-                selectedUris
-                    .chunked(4)
-                    .flatMap { uriChunk ->
+                buildList {
+                    selectedUris.chunked(4).forEachIndexed { chunkIndex, uriChunk ->
                         val payloads = uriChunk.map { uri ->
                             AiImagePreprocessor.prepare(context, uri)
                         }
-                        GeminiService.analyzeImages(payloads)
+                        addAll(GeminiService.analyzeImages(payloads))
+                        val completed = minOf(selectedUris.size, (chunkIndex + 1) * 4)
+                        recognitionProgress = "正在辨識 $completed / ${selectedUris.size} 張"
                     }
+                }
                     .distinctBy { it.word.trim().lowercase() }
             }.onSuccess { parsed ->
                 isOcrScanning = false
-                rawInputText = ""
+                recognitionProgress = ""
                 localCandidates.clear()
                 localCandidates.addAll(parsed)
                 snackbarHostState.showSnackbar(
@@ -182,6 +186,7 @@ fun PhotoOcrScreen(
                 )
             }.onFailure { error ->
                 isOcrScanning = false
+                recognitionProgress = ""
                 snackbarHostState.showSnackbar(
                     "${source}失敗：${error.localizedMessage ?: "多模態 AI 無法讀取圖片"}"
                 )
@@ -261,6 +266,38 @@ fun PhotoOcrScreen(
         }
     }
 
+    val candidateListState = rememberLazyListState()
+    fun enrichCandidates() {
+        if (isAiEnriching || !aiAvailable) return
+        isAiEnriching = true
+        coroutineScope.launch {
+            snackbarHostState.showSnackbar("AI 正在分析並補齊單字資訊")
+            val currentList = localCandidates.toList()
+            runCatching {
+                val aiEnriched = GeminiService.batchEnrichCandidates(currentList)
+                OcrWordParser.enrichCandidatesWithDictionary(aiEnriched)
+            }.onSuccess { finalEnriched ->
+                localCandidates.clear()
+                localCandidates.addAll(finalEnriched)
+                val serviceError = GeminiService.lastError.value
+                snackbarHostState.showSnackbar(
+                    when {
+                        serviceError != null -> "AI 補齊失敗：$serviceError"
+                        finalEnriched != currentList -> "AI 補齊完成，請確認內容"
+                        else -> "AI 沒有回傳可套用的新資料"
+                    }
+                )
+            }.onFailure { error ->
+                snackbarHostState.showSnackbar("AI 補齊失敗：${error.localizedMessage ?: "請檢查 API 設定"}")
+            }
+            isAiEnriching = false
+        }
+    }
+    fun importCandidates() {
+        val deckId = selectedDeckId ?: return
+        onImportCandidates(localCandidates.filter { it.isSelected }, deckId)
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -275,6 +312,30 @@ fun PhotoOcrScreen(
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
+        bottomBar = {
+            if (localCandidates.isNotEmpty()) {
+                Surface(shadowElevation = 8.dp, color = MaterialTheme.colorScheme.surface) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = ::enrichCandidates,
+                            enabled = aiAvailable && !isAiEnriching,
+                            modifier = Modifier.weight(1f).testTag("ai_batch_enrich_button")
+                        ) {
+                            if (isAiEnriching) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                            Text(if (isAiEnriching) "補齊中…" else "AI 補齊")
+                        }
+                        Button(
+                            onClick = ::importCandidates,
+                            enabled = selectedDeckId != null && localCandidates.any { it.isSelected },
+                            modifier = Modifier.weight(1f).testTag("batch_import_button")
+                        ) { Icon(Icons.Default.Check, null); Text("確認匯入") }
+                    }
+                }
+            }
+        },
         modifier = modifier
     ) { innerPadding ->
         Column(
@@ -285,24 +346,6 @@ fun PhotoOcrScreen(
                 .padding(responsive.horizontalPadding),
             verticalArrangement = Arrangement.spacedBy(if (responsive.isConstrained) 8.dp else 16.dp)
         ) {
-            // Instructions Banner
-            if (!responsive.isLandscape) Card(
-                shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "圖片會直接交給多模態 AI；確認結果後才會匯入。",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
-            }
-
             if (decks.isEmpty()) {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
@@ -316,18 +359,11 @@ fun PhotoOcrScreen(
                     )
                 }
             } else {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("匯入到", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(decks, key = { it.id }) { deck ->
-                            FilterChip(
-                                selected = selectedDeckId == deck.id,
-                                onClick = { selectedDeckId = deck.id },
-                                label = { Text(deck.name) }
-                            )
-                        }
-                    }
-                }
+                ImportDestinationSelector(
+                    decks = decks,
+                    selectedDeckId = selectedDeckId,
+                    onDeckSelected = { selectedDeckId = it }
+                )
             }
 
             if (!aiAvailable) {
@@ -484,7 +520,7 @@ fun PhotoOcrScreen(
                     ) {
                         CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
                         Text(
-                            if (isScannerLaunching) "正在準備文件掃描…" else "多模態 AI 正在辨識圖片…",
+                            if (isScannerLaunching) "正在準備文件掃描…" else recognitionProgress.ifBlank { "正在辨識圖片…" },
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Bold
                         )
@@ -492,122 +528,20 @@ fun PhotoOcrScreen(
                 }
             }
 
-            // Raw Text Input / OCR Result Area
-            OutlinedTextField(
-                value = rawInputText,
-                onValueChange = { rawInputText = it },
-                label = { Text("辨識文字") },
-                placeholder = { Text("可拍照辨識，或直接貼上文字") },
-                trailingIcon = {
-                    IconButton(
-                        onClick = { onParseText(rawInputText, selectedDeckId ?: 0L) },
-                        enabled = rawInputText.isNotBlank() && !isOcrScanning
-                    ) {
-                        Icon(Icons.Default.Check, contentDescription = "解析文字")
-                    }
-                },
-                maxLines = 4,
-                enabled = !isOcrScanning,
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("ocr_text_input")
-            )
-
             // Extracted Candidates Table List
             if (localCandidates.isNotEmpty()) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FlowRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                Text(
+                    text = "找到 ${localCandidates.size} 張",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                )
+
+                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                    LazyColumn(
+                        state = candidateListState,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxSize().padding(end = 52.dp)
                     ) {
-                        Text(
-                            text = "找到 ${localCandidates.size} 張",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            modifier = Modifier.weight(1f)
-                        )
-
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            // AI Auto Fill Button
-                            if (aiAvailable) Button(
-                                onClick = {
-                                    if (!isAiEnriching) {
-                                        isAiEnriching = true
-                                        coroutineScope.launch {
-                                            snackbarHostState.showSnackbar("AI 正在分析並補齊單字資訊")
-                                            val currentList = localCandidates.toList()
-                                            runCatching {
-                                                val aiEnriched =
-                                                    com.example.data.api.GeminiService.batchEnrichCandidates(currentList)
-                                                OcrWordParser.enrichCandidatesWithDictionary(aiEnriched)
-                                            }.onSuccess { finalEnriched ->
-                                                localCandidates.clear()
-                                                localCandidates.addAll(finalEnriched)
-                                                val changed = finalEnriched != currentList
-                                                val serviceError =
-                                                    com.example.data.api.GeminiService.lastError.value
-                                                snackbarHostState.showSnackbar(
-                                                    when {
-                                                        serviceError != null ->
-                                                            "AI 補齊失敗：$serviceError"
-                                                        changed -> "AI 補齊完成，請確認內容"
-                                                        else -> "AI 沒有回傳可套用的新資料"
-                                                    }
-                                                )
-                                            }.onFailure { error ->
-                                                snackbarHostState.showSnackbar(
-                                                    "AI 補齊失敗：${error.localizedMessage ?: "請檢查 API 設定"}"
-                                                )
-                                            }
-                                            isAiEnriching = false
-                                        }
-                                    }
-                                },
-                                enabled = !isAiEnriching,
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
-                                shape = RoundedCornerShape(14.dp),
-                                modifier = Modifier.testTag("ai_batch_enrich_button")
-                            ) {
-                                if (isAiEnriching) {
-                                    CircularProgressIndicator(
-                                        color = MaterialTheme.colorScheme.onSecondary,
-                                        modifier = Modifier.size(16.dp),
-                                        strokeWidth = 2.dp
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                }
-                                Text(if (isAiEnriching) "處理中…" else "AI 補齊", fontWeight = FontWeight.Bold)
-                            }
-
-                            // Batch Import Button
-                            Button(
-                                onClick = {
-                                    selectedDeckId?.let { deckId ->
-                                        onImportCandidates(localCandidates.filter { it.isSelected }, deckId)
-                                    }
-                                },
-                                enabled = selectedDeckId != null && localCandidates.any { it.isSelected },
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                                shape = RoundedCornerShape(14.dp),
-                                modifier = Modifier.testTag("batch_import_button")
-                            ) {
-                                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(Modifier.width(4.dp))
-                                Text("匯入")
-                            }
-                        }
-                    }
-                }
-
-                LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    itemsIndexed(localCandidates) { index, candidate ->
+                        itemsIndexed(localCandidates) { index, candidate ->
                         Card(
                             shape = RoundedCornerShape(14.dp),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -688,7 +622,20 @@ fun PhotoOcrScreen(
                                 }
                             }
                         }
+                        }
                     }
+                    FloatingActionButton(
+                        onClick = { coroutineScope.launch { candidateListState.animateScrollToItem(0) } },
+                        modifier = Modifier.align(Alignment.TopEnd).size(44.dp)
+                    ) { Icon(Icons.Default.KeyboardArrowUp, "回到第一個單字") }
+                    FloatingActionButton(
+                        onClick = {
+                            coroutineScope.launch {
+                                candidateListState.animateScrollToItem((localCandidates.size - 1).coerceAtLeast(0))
+                            }
+                        },
+                        modifier = Modifier.align(Alignment.BottomEnd).size(44.dp)
+                    ) { Icon(Icons.Default.KeyboardArrowDown, "前往最後一個單字") }
                 }
             } else if (!isOcrScanning && !isScannerLaunching) {
                 com.example.ui.components.CalmEmptyState(
