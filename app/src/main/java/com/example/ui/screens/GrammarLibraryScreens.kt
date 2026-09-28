@@ -128,23 +128,32 @@ fun GrammarLibrariesScreen(
     }
 
     Scaffold(
-        floatingActionButton = { FloatingActionButton(onClick = { showAdd = true }) { Icon(Icons.Default.Add, "新增文法庫") } }
+        floatingActionButton = {
+            if (highlightedAction == "manage") {
+                FloatingActionButton(
+                    onClick = { showAdd = true },
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    shape = CircleShape
+                ) { Icon(Icons.Default.Add, "新增文法庫") }
+            }
+        }
     ) { padding ->
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp),
             contentPadding = PaddingValues(bottom = 96.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             item {
-                Text("選擇課程", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                Text("選擇課程", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.height(6.dp))
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     item { CourseChip("全部文法庫 (${libraries.size})", selectedCourse == null) { selectedCourse = null } }
                     items(courses) { course -> CourseChip("$course (${libraries.count { it.course == course }})", selectedCourse == course) { selectedCourse = course } }
                 }
-                if (libraries.isNotEmpty()) {
-                    Spacer(Modifier.height(10.dp))
+                if (highlightedAction == "manage" && libraries.isNotEmpty()) {
+                    Spacer(Modifier.height(8.dp))
                     Text("拖曳卡片右上方把手可調整整體順序。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
@@ -157,55 +166,202 @@ fun GrammarLibrariesScreen(
                     val mastered = libraryNotes.count { it.masteryPercent >= 80 }
                     val due = libraryNotes.count { it.nextReviewAt <= System.currentTimeMillis() && it.masteryPercent < 80 }
                     val color = runCatching { Color(android.graphics.Color.parseColor(library.colorHex)) }.getOrElse { MaterialTheme.colorScheme.primary }
-                    Card(
-                        shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (dragging) .8f else .55f)),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(Modifier.size(14.dp).clip(CircleShape).background(color))
-                                Spacer(Modifier.width(8.dp))
-                                Column(Modifier.weight(1f)) {
-                                    Text(library.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    Text(library.course, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                }
-                                Icon(Icons.Default.DragHandle, "拖曳排序", Modifier.draggableHandle())
-                                IconButton(onClick = { editing = library }) { Icon(Icons.Default.Edit, "編輯文法庫") }
-                                IconButton(onClick = { deleting = library }) { Icon(Icons.Default.Delete, "刪除文法庫", tint = MaterialTheme.colorScheme.error) }
-                            }
-                            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surface).padding(10.dp), horizontalArrangement = Arrangement.SpaceAround) {
-                                Stat("總文法", total)
-                                Stat("已精通", mastered)
-                                Stat("待複習", due)
-                            }
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                LibraryAction("管理", highlightedAction == "manage", true, { onManage(library) }, Modifier.weight(1f))
-                                LibraryAction("學習", highlightedAction == "learn", total > 0, { onLearn(library) }, Modifier.weight(1f))
-                                LibraryAction("測驗", highlightedAction == "quiz", total > 0, { onQuiz(library) }, Modifier.weight(1f))
-                            }
-                        }
+                    when (highlightedAction) {
+                        "learn" -> GrammarLearningLibraryCard(library, total, mastered, due, color, { onManage(library) }, { onLearn(library) }, { onQuiz(library) })
+                        "quiz" -> GrammarQuizLibraryCard(library, total, color, { onManage(library) }, { onLearn(library) }, { onQuiz(library) })
+                        else -> GrammarManageLibraryCard(
+                            library, total, mastered, due, color, dragging,
+                            { editing = library }, { deleting = library }, { onManage(library) }, { onLearn(library) }, { onQuiz(library) },
+                            Modifier.draggableHandle()
+                        )
                     }
                 }
             }
+            item { Spacer(Modifier.height(24.dp)) }
         }
     }
 }
 
 @Composable private fun CourseChip(text: String, selected: Boolean, onClick: () -> Unit) {
     Surface(onClick = onClick, shape = RoundedCornerShape(20.dp), color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant) {
-        Text(text, Modifier.padding(horizontal = 14.dp, vertical = 8.dp), fontWeight = FontWeight.Bold, maxLines = 1)
+        Text(
+            text,
+            Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+            color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+            maxLines = 1
+        )
     }
 }
 
 @Composable private fun Stat(label: String, value: Int) = Column(horizontalAlignment = Alignment.CenterHorizontally) {
-    Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    Text(value.toString(), fontWeight = FontWeight.Bold)
+    Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+    Text(value.toString(), style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold))
 }
 
 @Composable private fun LibraryAction(text: String, selected: Boolean, enabled: Boolean, onClick: () -> Unit, modifier: Modifier) {
-    if (selected) Button(onClick = onClick, enabled = enabled, modifier = modifier) { Text(text) }
-    else OutlinedButton(onClick = onClick, enabled = enabled, modifier = modifier) { Text(text) }
+    if (selected) Button(onClick = onClick, enabled = enabled, modifier = modifier, shape = RoundedCornerShape(12.dp)) { Text(text, fontWeight = FontWeight.Bold) }
+    else OutlinedButton(onClick = onClick, enabled = enabled, modifier = modifier, shape = RoundedCornerShape(12.dp)) { Text(text, fontWeight = FontWeight.Bold) }
+}
+
+@Composable
+private fun GrammarManageLibraryCard(
+    library: GrammarLibrary,
+    total: Int,
+    mastered: Int,
+    due: Int,
+    color: Color,
+    dragging: Boolean,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onManage: () -> Unit,
+    onLearn: () -> Unit,
+    onQuiz: () -> Unit,
+    dragModifier: Modifier
+) {
+    Card(
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (dragging) .8f else .5f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(16.dp).clip(CircleShape).background(color))
+                    Spacer(Modifier.width(8.dp))
+                    Column {
+                        Text(library.name, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(library.course, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(0.dp)) {
+                    IconButton(onClick = {}, modifier = dragModifier.size(36.dp)) {
+                        Icon(Icons.Default.DragHandle, "拖曳排序", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+                    }
+                    IconButton(onClick = onEdit, modifier = Modifier.size(36.dp)) {
+                        Icon(Icons.Default.Edit, "編輯文法庫", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+                    }
+                    IconButton(onClick = onDelete, modifier = Modifier.size(36.dp)) {
+                        Icon(Icons.Default.Delete, "刪除文法庫", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+                    }
+                }
+            }
+            if (library.description.isNotBlank()) {
+                Text(library.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+            Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surface).padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceAround
+            ) {
+                Stat("總文法", total)
+                Stat("已精通", mastered)
+                Stat("待複習", due)
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                LibraryAction("管理", true, true, onManage, Modifier.weight(1f))
+                LibraryAction("學習", false, total > 0, onLearn, Modifier.weight(1f))
+                LibraryAction("測驗", false, total > 0, onQuiz, Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun GrammarLearningLibraryCard(
+    library: GrammarLibrary,
+    total: Int,
+    mastered: Int,
+    due: Int,
+    color: Color,
+    onManage: () -> Unit,
+    onLearn: () -> Unit,
+    onQuiz: () -> Unit
+) {
+    val progress = if (total > 0) mastered.toFloat() / total else 0f
+    Card(
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .5f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(14.dp).clip(CircleShape).background(color))
+                    Spacer(Modifier.width(8.dp))
+                    Text(library.name, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                Surface(shape = RoundedCornerShape(10.dp), color = if (due > 0) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer) {
+                    Text(
+                        when {
+                            total == 0 -> "沒有文法"
+                            due > 0 -> "待複習 $due"
+                            mastered == total -> "已完成"
+                            else -> "無到期"
+                        },
+                        Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = if (due > 0) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                }
+            }
+            Column {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("精通進度", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                    Text("${(progress * 100).toInt()}% ($mastered/$total)", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold))
+                }
+                Spacer(Modifier.height(4.dp))
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
+                    color = color,
+                    trackColor = MaterialTheme.colorScheme.surface
+                )
+            }
+            Spacer(Modifier.height(2.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                LibraryAction("管理", false, true, onManage, Modifier.weight(1f))
+                LibraryAction("學習", true, total > 0, onLearn, Modifier.weight(1f))
+                LibraryAction("測驗", false, total > 0, onQuiz, Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun GrammarQuizLibraryCard(
+    library: GrammarLibrary,
+    total: Int,
+    color: Color,
+    onManage: () -> Unit,
+    onLearn: () -> Unit,
+    onQuiz: () -> Unit
+) {
+    Card(
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .5f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(14.dp).clip(CircleShape).background(color))
+                    Spacer(Modifier.width(8.dp))
+                    Column {
+                        Text(library.name, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(library.course, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+                Surface(shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.secondaryContainer) {
+                    Text("$total 個", Modifier.padding(horizontal = 10.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSecondaryContainer)
+                }
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                LibraryAction("管理", false, true, onManage, Modifier.weight(1f))
+                LibraryAction("學習", false, total > 0, onLearn, Modifier.weight(1f))
+                LibraryAction("測驗", true, total > 0, onQuiz, Modifier.weight(1.2f))
+            }
+        }
+    }
 }
 
 @Composable
