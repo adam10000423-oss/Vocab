@@ -19,3 +19,11 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# ML Kit document scanner is delivered through Google Play services and is reached through
+# dynamically loaded implementation classes. Keep its public bridge and generated internals in
+# minified release builds; otherwise opening the scanner can fail only after publishing.
+-keep class com.google.mlkit.vision.documentscanner.** { *; }
+-keep class com.google.android.gms.internal.mlkit_vision_document_scanner.** { *; }
+-dontwarn com.google.android.gms.internal.mlkit_vision_document_scanner.**
+-keepattributes SourceFile,LineNumberTable,Signature,*Annotation*

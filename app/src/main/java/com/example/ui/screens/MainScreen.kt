@@ -171,10 +171,8 @@ fun MainScreen(
                         }
                     },
                     actions = {
-                        if (!grammarMode) {
-                            IconButton(onClick = onOpenWordSearch) {
-                                Icon(Icons.Default.Search, contentDescription = "搜尋英文單字")
-                            }
+                        IconButton(onClick = onOpenWordSearch) {
+                            Icon(Icons.Default.Search, contentDescription = if (grammarMode) "搜尋文法" else "搜尋英文單字")
                         }
                         IconButton(onClick = onOpenAssistant) {
                             Icon(

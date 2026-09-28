@@ -67,7 +67,8 @@ fun GrammarImportScreen(
     val files = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments(), ::process)
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok -> if (ok) pendingCameraUri?.let { process(listOf(it)) } }
     val scanner = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
-        if (result.resultCode == Activity.RESULT_OK) process(GmsDocumentScanningResult.fromActivityResultIntent(result.data)?.pages?.map { it.imageUri }.orEmpty())
+        if (result.resultCode == Activity.RESULT_OK) runCatching { GmsDocumentScanningResult.fromActivityResultIntent(result.data)?.pages?.map { it.imageUri }.orEmpty() }
+            .onSuccess(::process).onFailure { message = "無法讀取掃描結果，請重新掃描或改用相片" }
     }
     val shareFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) scope.launch { busy = true; message = null; runCatching { onImportShare(uri) }.onSuccess(onPreview).onFailure { message = it.message ?: "無法讀取分享檔" }; busy = false }
@@ -82,9 +83,11 @@ fun GrammarImportScreen(
         val options = GmsDocumentScannerOptions.Builder().setGalleryImportAllowed(true).setPageLimit(10)
             .setResultFormats(GmsDocumentScannerOptions.RESULT_FORMAT_JPEG)
             .setScannerMode(GmsDocumentScannerOptions.SCANNER_MODE_FULL).build()
-        GmsDocumentScanning.getClient(options).getStartScanIntent(activity)
-            .addOnSuccessListener { scanner.launch(IntentSenderRequest.Builder(it).build()) }
-            .addOnFailureListener { message = it.message ?: "無法開啟掃描器" }
+        runCatching { GmsDocumentScanning.getClient(options).getStartScanIntent(activity) }
+            .onFailure { message = it.message ?: "此裝置不支援掃描服務" }
+            .getOrNull()
+            ?.addOnSuccessListener { scanner.launch(IntentSenderRequest.Builder(it).build()) }
+            ?.addOnFailureListener { message = it.message ?: "無法開啟掃描器" }
     }
     if (showPasteDialog) AlertDialog(
         onDismissRequest = { if (!busy) showPasteDialog = false }, title = { Text("貼上文法內容") },

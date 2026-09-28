@@ -201,8 +201,11 @@ fun AiAssistantScreen(
         ActivityResultContracts.StartIntentSenderForResult()
     ) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
-            val pages = GmsDocumentScanningResult.fromActivityResultIntent(result.data)
-                ?.pages.orEmpty().map { it.imageUri }
+            val pages = runCatching { GmsDocumentScanningResult.fromActivityResultIntent(result.data)
+                ?.pages.orEmpty().map { it.imageUri } }.getOrElse {
+                attachmentError = "無法讀取掃描結果，請重新掃描或改用相片"
+                emptyList()
+            }
             attachments = (attachments + pages).distinct().take(5)
         }
     }
@@ -216,7 +219,18 @@ fun AiAssistantScreen(
     }
     var showHistory by remember { mutableStateOf(false) }
     var showClearConfirmation by remember { mutableStateOf(false) }
+    var conversationPendingDelete by remember { mutableStateOf<String?>(null) }
     var showScopeSelector by remember { mutableStateOf(false) }
+
+    conversationPendingDelete?.let { id ->
+        AlertDialog(
+            onDismissRequest = { conversationPendingDelete = null },
+            title = { Text("刪除這則對話？") },
+            text = { Text("對話內容與附件紀錄會一併刪除，且無法復原。") },
+            confirmButton = { Button(onClick = { onDeleteConversation(id); conversationPendingDelete = null }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("刪除") } },
+            dismissButton = { TextButton(onClick = { conversationPendingDelete = null }) { Text("取消") } }
+        )
+    }
     var draftScope by remember(selectedDeckIds, showScopeSelector) {
         mutableStateOf(selectedDeckIds)
     }
@@ -305,12 +319,13 @@ fun AiAssistantScreen(
                         if (activity == null) {
                             attachmentError = "此裝置無法啟動文件掃描"
                         } else {
-                            GmsDocumentScanning.getClient(scannerOptions)
-                                .getStartScanIntent(activity)
-                                .addOnSuccessListener { sender ->
+                            runCatching { GmsDocumentScanning.getClient(scannerOptions).getStartScanIntent(activity) }
+                                .onFailure { attachmentError = it.localizedMessage ?: "此裝置不支援掃描服務" }
+                                .getOrNull()
+                                ?.addOnSuccessListener { sender ->
                                     scannerLauncher.launch(IntentSenderRequest.Builder(sender).build())
                                 }
-                                .addOnFailureListener {
+                                ?.addOnFailureListener {
                                     attachmentError = it.localizedMessage ?: "請確認 Google Play 服務與網路"
                                 }
                         }
@@ -521,7 +536,7 @@ fun AiAssistantScreen(
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
-                                    IconButton(onClick = { onDeleteConversation(conversation.id) }) {
+                                    IconButton(onClick = { conversationPendingDelete = conversation.id }) {
                                         Icon(Icons.Default.Delete, contentDescription = "刪除對話")
                                     }
                                 }

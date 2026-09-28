@@ -200,8 +200,12 @@ fun PhotoOcrScreen(
     ) { activityResult ->
         isScannerLaunching = false
         if (activityResult.resultCode == Activity.RESULT_OK) {
-            val result = GmsDocumentScanningResult.fromActivityResultIntent(activityResult.data)
-            val pageUris = result?.pages.orEmpty().map { it.imageUri }
+            val pageUris = runCatching {
+                GmsDocumentScanningResult.fromActivityResultIntent(activityResult.data)?.pages.orEmpty().map { it.imageUri }
+            }.getOrElse {
+                coroutineScope.launch { snackbarHostState.showSnackbar("無法讀取掃描結果，請重新掃描或改用相片") }
+                emptyList()
+            }
             if (pageUris.isNotEmpty()) {
                 processImageUris(pageUris, "文件掃描")
             } else {
@@ -434,12 +438,16 @@ fun PhotoOcrScreen(
                             }
                         } else {
                             isScannerLaunching = true
-                            GmsDocumentScanning.getClient(scannerOptions)
-                                .getStartScanIntent(activity)
-                                .addOnSuccessListener { sender ->
+                            runCatching { GmsDocumentScanning.getClient(scannerOptions).getStartScanIntent(activity) }
+                                .onFailure { error ->
+                                    isScannerLaunching = false
+                                    coroutineScope.launch { snackbarHostState.showSnackbar("文件掃描無法啟動：${error.localizedMessage ?: "此裝置不支援掃描服務"}") }
+                                }
+                                .getOrNull()
+                                ?.addOnSuccessListener { sender ->
                                     documentScannerLauncher.launch(IntentSenderRequest.Builder(sender).build())
                                 }
-                                .addOnFailureListener { error ->
+                                ?.addOnFailureListener { error ->
                                     isScannerLaunching = false
                                     coroutineScope.launch {
                                         snackbarHostState.showSnackbar(

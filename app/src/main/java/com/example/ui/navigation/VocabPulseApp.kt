@@ -62,6 +62,7 @@ import com.example.ui.screens.GrammarImportScreen
 import com.example.ui.screens.GrammarImportPreviewScreen
 import com.example.ui.screens.GrammarNoteDetailScreen
 import com.example.ui.screens.GrammarWritingCheckScreen
+import com.example.ui.screens.GrammarSearchScreen
 import com.example.viewmodel.VocabularyViewModel
 import com.example.util.GitHubUpdateManager
 import com.example.util.UpdateCheckResult
@@ -79,6 +80,7 @@ object Routes {
     const val STUDY_CALENDAR = "study_calendar"
     const val QUALITY_CHECK = "quality_check"
     const val WORD_LOOKUP = "word_lookup"
+    const val GRAMMAR_SEARCH = "grammar_search"
     const val GENERATED_READING = "generated_reading"
     const val GRAMMAR_EDITOR = "grammar_editor"
     const val GRAMMAR_DETAIL = "grammar_detail"
@@ -270,7 +272,7 @@ fun VocabApp(
                 },
                 showBottomNavigation = grammarMode || !quizGameActive,
                 onOpenSettings = { navController.navigate(Routes.SETTINGS) },
-                onOpenWordSearch = { navController.navigate(Routes.WORD_LOOKUP) },
+                onOpenWordSearch = { navController.navigate(if (grammarMode) Routes.GRAMMAR_SEARCH else Routes.WORD_LOOKUP) },
                 grammarMode = grammarMode,
                 onToggleGrammarMode = {
                     val nextMode = !grammarMode
@@ -633,6 +635,14 @@ fun VocabApp(
                 },
                 onAddToDeck = viewModel::addDictionaryEntryToDeck,
                 onCreateFolderAndAdd = viewModel::createFolderAndAddDictionaryEntry
+            )
+        }
+
+        composable(Routes.GRAMMAR_SEARCH) {
+            GrammarSearchScreen(
+                notes = grammarNotes,
+                onOpen = { note -> selectedGrammarId = note.id; navController.navigate(Routes.GRAMMAR_DETAIL) },
+                onBack = { navController.popBackStack() }
             )
         }
 

@@ -44,6 +44,34 @@ import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 
 @Composable
+private fun GrammarCourseChips(
+    notes: List<GrammarNote>,
+    selected: String?,
+    onSelect: (String?) -> Unit
+) {
+    val courses = remember(notes) { notes.groupingBy { it.course.ifBlank { "未分類" } }.eachCount().toList() }
+    Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+        Text("選擇課程", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.primary)
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            item {
+                FilterChip(
+                    selected = selected == null,
+                    onClick = { onSelect(null) },
+                    label = { Text("全部資料夾 (${notes.map { it.folder }.distinct().size})", maxLines = 1) }
+                )
+            }
+            items(courses, key = { it.first }) { (course, count) ->
+                FilterChip(
+                    selected = selected == course,
+                    onClick = { onSelect(course) },
+                    label = { Text("$course ($count)", maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
 fun GrammarDashboardScreen(
     notes: List<GrammarNote>,
     weaknesses: List<GrammarWeakness>,
@@ -180,14 +208,18 @@ fun GrammarNotesScreen(
     onOpen: (GrammarNote) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val filterPrefs = LocalContext.current.getSharedPreferences("grammar_page_filters", Context.MODE_PRIVATE)
     val now = System.currentTimeMillis()
     var searchQuery by rememberSaveable { mutableStateOf("") }
     val courses = remember(notes) { notes.map { it.course }.filter { it.isNotBlank() }.distinct() }
-    var selectedCourse by rememberSaveable { mutableStateOf<String?>(null) }
-    var selectedType by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedCourse by rememberSaveable { mutableStateOf(filterPrefs.getString("library_course", null)) }
+    var selectedType by rememberSaveable { mutableStateOf(filterPrefs.getString("library_folder", null)) }
     val folders = remember(notes, selectedCourse) { notes.filter { selectedCourse == null || it.course == selectedCourse }.map { it.folder }.filter { it.isNotBlank() }.distinct() }
-    var courseMenu by remember { mutableStateOf(false) }
     var typeMenu by remember { mutableStateOf(false) }
+    LaunchedEffect(selectedCourse, selectedType) { filterPrefs.edit().apply {
+        if (selectedCourse == null) remove("library_course") else putString("library_course", selectedCourse)
+        if (selectedType == null) remove("library_folder") else putString("library_folder", selectedType)
+    }.apply() }
 
     val filteredNotes = remember(notes, searchQuery, selectedCourse, selectedType) {
         notes.filter { note ->
@@ -256,25 +288,15 @@ fun GrammarNotesScreen(
             )
         }
 
-        // Filters use the same compact two-dropdown structure as folder management.
         item {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                ExposedDropdownMenuBox(expanded = courseMenu, onExpandedChange = { courseMenu = it }, modifier = Modifier.weight(1f)) {
-                    OutlinedTextField(
-                        value = selectedCourse ?: "全部課程", onValueChange = {}, readOnly = true,
-                        label = { Text("課程") }, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(courseMenu) },
-                        singleLine = true, modifier = Modifier.menuAnchor().fillMaxWidth()
-                    )
-                    ExposedDropdownMenu(expanded = courseMenu, onDismissRequest = { courseMenu = false }) {
-                        DropdownMenuItem(text = { Text("全部課程") }, onClick = { selectedCourse = null; courseMenu = false })
-                        courses.forEach { course -> DropdownMenuItem(text = { Text(course) }, onClick = { selectedCourse = course; courseMenu = false }) }
-                    }
-                }
-                ExposedDropdownMenuBox(expanded = typeMenu, onExpandedChange = { typeMenu = it }, modifier = Modifier.weight(1f)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                GrammarCourseChips(notes, selectedCourse) { selectedCourse = it; selectedType = null }
+                ExposedDropdownMenuBox(expanded = typeMenu, onExpandedChange = { typeMenu = it }) {
                     OutlinedTextField(
                         value = selectedType ?: "全部資料夾", onValueChange = {}, readOnly = true,
                         label = { Text("資料夾") }, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(typeMenu) },
-                        singleLine = true, modifier = Modifier.menuAnchor().fillMaxWidth()
+                        singleLine = true, modifier = Modifier.menuAnchor().fillMaxWidth(),
+                        textStyle = MaterialTheme.typography.bodyLarge
                     )
                     ExposedDropdownMenu(expanded = typeMenu, onDismissRequest = { typeMenu = false }) {
                         DropdownMenuItem(text = { Text("全部資料夾") }, onClick = { selectedType = null; typeMenu = false })
@@ -289,7 +311,36 @@ fun GrammarNotesScreen(
             FilledTonalButton(onClick = onImport, modifier = Modifier.weight(1f)) { Icon(Icons.Default.DocumentScanner, null); Spacer(Modifier.width(6.dp)); Text("匯入") }
         } }
 
-        if (displayedNotes.isEmpty()) {
+        val showFolderOverview = searchQuery.isBlank() && selectedType == null
+        val folderGroups = filteredNotes.groupBy { it.folder.ifBlank { "未分類" } }
+        if (showFolderOverview && folderGroups.isNotEmpty()) {
+            items(folderGroups.entries.toList(), key = { "grammar-folder-${it.key}" }) { (folder, folderNotes) ->
+                val dueCount = folderNotes.count { it.nextReviewAt <= now }
+                Card(
+                    onClick = { selectedType = folder },
+                    shape = RoundedCornerShape(22.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .55f))
+                ) {
+                    Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Folder, null, tint = MaterialTheme.colorScheme.primary)
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(folder, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                                Text(selectedCourse ?: folderNotes.firstOrNull()?.course.orEmpty(), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Icon(Icons.Default.ChevronRight, "管理")
+                        }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                            Text("${folderNotes.size} 篇文法")
+                            Text("待複習 $dueCount")
+                            Text("題目 ${folderNotes.sumOf { if (it.questionTemplate.isBlank()) 0 else 1 }}")
+                        }
+                        Button(onClick = { selectedType = folder }, modifier = Modifier.fillMaxWidth()) { Text("管理") }
+                    }
+                }
+            }
+        } else if (displayedNotes.isEmpty()) {
             item {
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))) {
                     Column(
@@ -328,13 +379,17 @@ fun GrammarStudyHubScreen(
     onOpen: (GrammarNote) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val filterPrefs = LocalContext.current.getSharedPreferences("grammar_page_filters", Context.MODE_PRIVATE)
     val now = System.currentTimeMillis()
     val courses = remember(notes) { notes.map { it.course }.filter(String::isNotBlank).distinct() }
-    var selectedCourse by rememberSaveable { mutableStateOf<String?>(null) }
-    var selectedType by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedCourse by rememberSaveable { mutableStateOf(filterPrefs.getString("study_course", null)) }
+    var selectedType by rememberSaveable { mutableStateOf(filterPrefs.getString("study_folder", null)) }
     val grammarTypes = remember(notes, selectedCourse) { notes.filter { selectedCourse == null || it.course == selectedCourse }.map { it.folder }.filter(String::isNotBlank).distinct() }
-    var courseMenu by remember { mutableStateOf(false) }
     var typeMenu by remember { mutableStateOf(false) }
+    LaunchedEffect(selectedCourse, selectedType) { filterPrefs.edit().apply {
+        if (selectedCourse == null) remove("study_course") else putString("study_course", selectedCourse)
+        if (selectedType == null) remove("study_folder") else putString("study_folder", selectedType)
+    }.apply() }
     val filtered = remember(notes, selectedCourse, selectedType) { notes.filter {
         (selectedCourse == null || it.course == selectedCourse) && (selectedType == null || it.folder == selectedType)
     } }
@@ -347,9 +402,9 @@ fun GrammarStudyHubScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                GrammarFilterMenu("課程", selectedCourse ?: "全部課程", courses, courseMenu, { courseMenu = it }, { selectedCourse = it }, Modifier.weight(1f))
-                GrammarFilterMenu("資料夾", selectedType ?: "全部資料夾", grammarTypes, typeMenu, { typeMenu = it }, { selectedType = it }, Modifier.weight(1f))
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                GrammarCourseChips(notes, selectedCourse) { selectedCourse = it; selectedType = null }
+                GrammarFilterMenu("資料夾", selectedType ?: "全部資料夾", grammarTypes, typeMenu, { typeMenu = it }, { selectedType = it }, Modifier.fillMaxWidth())
             }
         }
         item {
@@ -571,9 +626,9 @@ fun GrammarEditorScreen(note: GrammarNote?, initialDraft: GrammarDraft? = null, 
     fun importImages(uris: List<Uri>) { if (uris.isEmpty()) return; scope.launch { busy=true; error=null; runCatching { onScanImages(uris) }.onSuccess(::applyDraft).onFailure { error=it.message ?: "辨識失敗" }; busy=false } }
     val gallery = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { importImages(it) }
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { if (it) pendingCameraUri?.let { u -> importImages(listOf(u)) } }
-    val scanner = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { r -> if (r.resultCode == Activity.RESULT_OK) importImages(GmsDocumentScanningResult.fromActivityResultIntent(r.data)?.pages?.map { it.imageUri }.orEmpty()) }
+    val scanner = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { r -> if (r.resultCode == Activity.RESULT_OK) runCatching { GmsDocumentScanningResult.fromActivityResultIntent(r.data)?.pages?.map { it.imageUri }.orEmpty() }.onSuccess(::importImages).onFailure { error = "無法讀取掃描結果，請改用相片" } }
     fun launchCamera() { val f=File(context.cacheDir,"grammar_${System.currentTimeMillis()}.jpg"); pendingCameraUri=FileProvider.getUriForFile(context,"${context.packageName}.fileprovider",f); camera.launch(pendingCameraUri!!) }
-    fun launchScanner() { val activity=context.findActivity() ?: return; val o=GmsDocumentScannerOptions.Builder().setGalleryImportAllowed(true).setPageLimit(10).setResultFormats(GmsDocumentScannerOptions.RESULT_FORMAT_JPEG).setScannerMode(GmsDocumentScannerOptions.SCANNER_MODE_FULL).build(); GmsDocumentScanning.getClient(o).getStartScanIntent(activity).addOnSuccessListener { scanner.launch(IntentSenderRequest.Builder(it).build()) }.addOnFailureListener { error=it.message ?: "無法開啟掃描器" } }
+    fun launchScanner() { val activity=context.findActivity() ?: return; val o=GmsDocumentScannerOptions.Builder().setGalleryImportAllowed(true).setPageLimit(10).setResultFormats(GmsDocumentScannerOptions.RESULT_FORMAT_JPEG).setScannerMode(GmsDocumentScannerOptions.SCANNER_MODE_FULL).build(); runCatching { GmsDocumentScanning.getClient(o).getStartScanIntent(activity) }.onFailure { error=it.message ?: "此裝置不支援掃描服務" }.getOrNull()?.addOnSuccessListener { scanner.launch(IntentSenderRequest.Builder(it).build()) }?.addOnFailureListener { error=it.message ?: "無法開啟掃描器" } }
     if (customField != null) AlertDialog(
         onDismissRequest = { customField = null },
         title = { Text("新增${customField}") },
@@ -867,6 +922,17 @@ fun GrammarWritingCheckScreen(
     var recordCourse by rememberSaveable { mutableStateOf(courses.firstOrNull() ?: "通用") }
     var courseMenu by remember { mutableStateOf(false) }
     var selectedRecord by remember { mutableStateOf<GrammarWritingRecord?>(null) }
+    var recordPendingDelete by remember { mutableStateOf<GrammarWritingRecord?>(null) }
+
+    recordPendingDelete?.let { record ->
+        AlertDialog(
+            onDismissRequest = { recordPendingDelete = null },
+            title = { Text("刪除作文紀錄？") },
+            text = { Text("「${record.title}」及完整批改結果將被刪除，這個動作無法復原。") },
+            confirmButton = { Button(onClick = { onDeleteRecord(record); recordPendingDelete = null; selectedRecord = null }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("刪除") } },
+            dismissButton = { TextButton(onClick = { recordPendingDelete = null }) { Text("取消") } }
+        )
+    }
 
     selectedRecord?.let { record ->
         AlertDialog(
@@ -876,11 +942,24 @@ fun GrammarWritingCheckScreen(
                 AssistChip(onClick = {}, label = { Text(record.course) })
                 Text("原始作文", fontWeight = FontWeight.Bold); Text(record.originalText)
                 HorizontalDivider(); Text("修改後作文", fontWeight = FontWeight.Bold); Text(record.revisedText)
-                val count = runCatching { JSONArray(record.issuesJson).length() }.getOrDefault(0)
-                Text("修改結果：$count 項", color = MaterialTheme.colorScheme.primary)
+                val savedIssues = runCatching { JSONArray(record.issuesJson) }.getOrNull()
+                val count = savedIssues?.length() ?: 0
+                Text("修改結果：$count 項", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                repeat(count) { index ->
+                    savedIssues?.optJSONObject(index)?.let { issue ->
+                        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .55f))) {
+                            Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                Text(issue.optString("title", "修改建議"), fontWeight = FontWeight.Bold)
+                                Text("原文：${issue.optString("originalSentence", issue.optString("originalText"))}", color = MaterialTheme.colorScheme.error)
+                                Text("建議：${issue.optString("correctedSentence", issue.optString("correctedText"))}", color = MaterialTheme.colorScheme.primary)
+                                issue.optString("explanation").takeIf(String::isNotBlank)?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                            }
+                        }
+                    }
+                }
             } },
             confirmButton = { TextButton(onClick = { selectedRecord = null }) { Text("完成") } },
-            dismissButton = { TextButton(onClick = { onDeleteRecord(record); selectedRecord = null }) { Text("刪除", color = MaterialTheme.colorScheme.error) } }
+            dismissButton = { TextButton(onClick = { recordPendingDelete = record }) { Text("刪除", color = MaterialTheme.colorScheme.error) } }
         )
     }
     if (showSaveDialog) AlertDialog(
@@ -922,7 +1001,8 @@ fun GrammarWritingCheckScreen(
     }
     val scanner = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
-            recognize(GmsDocumentScanningResult.fromActivityResultIntent(result.data)?.pages?.map { it.imageUri }.orEmpty())
+            runCatching { GmsDocumentScanningResult.fromActivityResultIntent(result.data)?.pages?.map { it.imageUri }.orEmpty() }
+                .onSuccess(::recognize).onFailure { error = "無法讀取掃描結果，請改用相片" }
         }
     }
     fun takePhoto() {
@@ -935,9 +1015,11 @@ fun GrammarWritingCheckScreen(
         val options = GmsDocumentScannerOptions.Builder().setGalleryImportAllowed(true).setPageLimit(10)
             .setResultFormats(GmsDocumentScannerOptions.RESULT_FORMAT_JPEG)
             .setScannerMode(GmsDocumentScannerOptions.SCANNER_MODE_FULL).build()
-        GmsDocumentScanning.getClient(options).getStartScanIntent(activity)
-            .addOnSuccessListener { scanner.launch(IntentSenderRequest.Builder(it).build()) }
-            .addOnFailureListener { error = it.message ?: "無法開啟掃描器" }
+        runCatching { GmsDocumentScanning.getClient(options).getStartScanIntent(activity) }
+            .onFailure { error = it.message ?: "此裝置不支援掃描服務" }
+            .getOrNull()
+            ?.addOnSuccessListener { scanner.launch(IntentSenderRequest.Builder(it).build()) }
+            ?.addOnFailureListener { error = it.message ?: "無法開啟掃描器" }
     }
 
     Scaffold(
@@ -1075,15 +1157,19 @@ fun GrammarQuizHubScreen(
     onOpenWritingCheck: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val filterPrefs = LocalContext.current.getSharedPreferences("grammar_page_filters", Context.MODE_PRIVATE)
     val courses = remember(notes) { notes.map { it.course }.filter(String::isNotBlank).distinct() }
-    var selectedCourse by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedCourse by rememberSaveable { mutableStateOf(filterPrefs.getString("quiz_course", null)) }
     val folders = remember(notes, selectedCourse) {
         notes.filter { selectedCourse == null || it.course == selectedCourse }
             .map { it.folder }.filter(String::isNotBlank).distinct()
     }
-    var selectedFolder by rememberSaveable { mutableStateOf<String?>(null) }
-    var courseMenu by remember { mutableStateOf(false) }
+    var selectedFolder by rememberSaveable { mutableStateOf(filterPrefs.getString("quiz_folder", null)) }
     var folderMenu by remember { mutableStateOf(false) }
+    LaunchedEffect(selectedCourse, selectedFolder) { filterPrefs.edit().apply {
+        if (selectedCourse == null) remove("quiz_course") else putString("quiz_course", selectedCourse)
+        if (selectedFolder == null) remove("quiz_folder") else putString("quiz_folder", selectedFolder)
+    }.apply() }
     LaunchedEffect(selectedCourse) { if (selectedFolder !in folders) selectedFolder = null }
     val selectedNotes = notes.filter { (selectedCourse == null || it.course == selectedCourse) && (selectedFolder == null || it.folder == selectedFolder) }
     val selectedIds = selectedNotes.map { it.id }.toSet()
@@ -1092,9 +1178,9 @@ fun GrammarQuizHubScreen(
         modifier = modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        item { Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            GrammarFilterMenu("課程", selectedCourse ?: "全部課程", courses, courseMenu, { courseMenu = it }, { selectedCourse = it }, Modifier.weight(1f))
-            GrammarFilterMenu("資料夾", selectedFolder ?: "全部資料夾", folders, folderMenu, { folderMenu = it }, { selectedFolder = it }, Modifier.weight(1f))
+        item { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            GrammarCourseChips(notes, selectedCourse) { selectedCourse = it; selectedFolder = null }
+            GrammarFilterMenu("資料夾", selectedFolder ?: "全部資料夾", folders, folderMenu, { folderMenu = it }, { selectedFolder = it }, Modifier.fillMaxWidth())
         } }
         item {
             Button(

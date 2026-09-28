@@ -124,7 +124,7 @@ class SettingsRepository(private val context: Context) {
             ocrPreviewBeforeImport = value[Keys.ocrPreviewBeforeImport] ?: true,
             pdfPageLimit = (value[Keys.pdfPageLimit] ?: 20).coerceIn(1, 50),
             dictionarySource = value[Keys.dictionarySource]
-                ?.takeIf { it in setOf("AUTO", "GOOGLE", "FREE") } ?: "AUTO",
+                ?.takeIf { it in setOf("AUTO", "GOOGLE", "CAMBRIDGE", "WIKTIONARY", "FREE") } ?: "AUTO",
             autoSpeak = value[Keys.autoSpeak] ?: false,
             speechRate = (value[Keys.speechRate] ?: 1f).coerceIn(0.5f, 1.5f),
             ttsVoiceStyle = value[Keys.ttsVoiceStyle] ?: "NATURAL",

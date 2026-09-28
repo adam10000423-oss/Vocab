@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -21,6 +22,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -43,6 +45,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.graphics.Color
@@ -57,6 +60,7 @@ import com.example.data.entity.Deck
 import com.example.ui.components.AddFolderDialog
 import com.example.ui.components.FlipCard
 import org.json.JSONObject
+import android.widget.Toast
 
 private data class ReadingTranslation(val sentence: String, val translation: String)
 private data class ReadingOption(val text: String, val correct: Boolean)
@@ -89,11 +93,13 @@ fun InteractiveReadingScreen(
     onCreateFolderAndCopyCard: (String, String, String, String, Flashcard, (Boolean) -> Unit) -> Unit,
     onBack: () -> Unit
 ) {
+    val context = LocalContext.current
     val content = remember(message.payload, message.content, cards) {
         parseReadingContent(message, cards)
     }
     var showTranslations by remember { mutableStateOf(false) }
     var selectedCard by remember { mutableStateOf<Flashcard?>(null) }
+    var selectedOutsideSource by remember { mutableStateOf(false) }
     var quizMode by remember { mutableStateOf(false) }
     var questionIndex by remember { mutableIntStateOf(0) }
     var selectedOption by remember { mutableIntStateOf(-1) }
@@ -170,11 +176,23 @@ fun InteractiveReadingScreen(
                         onFlip = { showBack = !showBack },
                         onSpeak = onSpeak,
                         onToggleFavorite = {},
+                        swipeEnabled = false,
+                        showFavorite = false,
+                        showSwipeHint = false,
                         modifier = Modifier.fillMaxWidth()
                     )
+                    if (selectedOutsideSource) {
+                        Button(
+                            onClick = { cardToAdd = card; selectedCard = null },
+                            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 14.dp)
+                        ) {
+                            Icon(Icons.Default.Folder, null)
+                            Text("加入資料夾", modifier = Modifier.padding(start = 8.dp))
+                        }
+                    }
                     IconButton(
                         onClick = { onStopSpeaking(); selectedCard = null },
-                        modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
+                        modifier = Modifier.align(Alignment.TopEnd).padding(end = 2.dp).offset(y = (-42).dp)
                     ) {
                         Surface(shape = androidx.compose.foundation.shape.CircleShape, color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)) {
                             Icon(Icons.Default.Close, "關閉", modifier = Modifier.padding(8.dp))
@@ -198,8 +216,13 @@ fun InteractiveReadingScreen(
                     }
                 },
                 actions = {
-                    if (!quizMode) IconButton(onClick = { onSpeak(content.article) }) {
-                        Icon(Icons.AutoMirrored.Filled.VolumeUp, "朗讀文章")
+                    if (!quizMode) {
+                        IconButton(onClick = {
+                            val store = context.getSharedPreferences("saved_reading_articles", android.content.Context.MODE_PRIVATE)
+                            store.edit().putString(message.id, message.payload.ifBlank { message.content }).apply()
+                            Toast.makeText(context, "文章已儲存", Toast.LENGTH_SHORT).show()
+                        }) { Icon(Icons.Default.Save, "儲存文章") }
+                        IconButton(onClick = { onSpeak(content.article) }) { Icon(Icons.AutoMirrored.Filled.VolumeUp, "朗讀文章") }
                     }
                 }
             )
@@ -242,7 +265,7 @@ fun InteractiveReadingScreen(
                 item {
                     val highlighted = highlightedArticle(
                         content.article,
-                        content.targetCards,
+                        cards,
                         MaterialTheme.colorScheme.primary
                     )
                     Card(
@@ -254,9 +277,17 @@ fun InteractiveReadingScreen(
                             style = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
                             modifier = Modifier.fillMaxWidth().padding(18.dp),
                             onClick = { offset ->
-                                val id = highlighted.getStringAnnotations("CARD", offset, offset)
-                                    .firstOrNull()?.item?.toLongOrNull()
-                                selectedCard = content.targetCards.firstOrNull { it.id == id }
+                                val word = highlighted.getStringAnnotations("WORD", offset, offset)
+                                    .firstOrNull()?.item ?: return@ClickableText
+                                val existing = cards.firstOrNull { it.word.trim().equals(word, ignoreCase = true) }
+                                val sourceDeckIds = content.targetCards.map { it.deckId }.toSet()
+                                selectedCard = existing ?: Flashcard(
+                                    id = -word.lowercase().hashCode().toLong().let { kotlin.math.abs(it) },
+                                    deckId = 0,
+                                    word = word,
+                                    definition = "尚未加入單字庫；可先聽發音，再加入資料夾補齊資料。"
+                                )
+                                selectedOutsideSource = existing == null || existing.deckId !in sourceDeckIds
                             }
                         )
                     }
@@ -387,9 +418,10 @@ private fun localReadingQuestions(cards: List<Flashcard>): List<ReadingQuestion>
 
 private fun highlightedArticle(article: String, cards: List<Flashcard>, highlight: Color): AnnotatedString = buildAnnotatedString {
     append(article)
-    cards.sortedByDescending { it.word.length }.forEach { card ->
-        Regex("\\b${Regex.escape(card.word)}\\b", RegexOption.IGNORE_CASE).findAll(article).forEach { match ->
-            addStringAnnotation("CARD", card.id.toString(), match.range.first, match.range.last + 1)
+    val known = cards.map { it.word.trim().lowercase() }.toSet()
+    Regex("[A-Za-z]+(?:['’][A-Za-z]+)*").findAll(article).forEach { match ->
+        addStringAnnotation("WORD", match.value, match.range.first, match.range.last + 1)
+        if (match.value.lowercase() in known) {
             addStyle(SpanStyle(color = highlight, fontWeight = FontWeight.Bold, background = highlight.copy(alpha = 0.12f)), match.range.first, match.range.last + 1)
         }
     }

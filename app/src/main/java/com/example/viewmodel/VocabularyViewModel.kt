@@ -3372,19 +3372,30 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
             (request.contains("測驗") || request.contains("剛剛"))
         if (onlyAsksQuizRecord) return emptyList()
         if (contextDeck != null) return cards.filter { it.deckId == contextDeck.id }.take(120)
+        val editableIds = _assistantSelectedDeckIds.value
         val needsAppData = listOf(
             "資料夾", "單字庫", "卡片", "這些單字", "我的單字", "排序",
             "詞性", "易混淆", "相近", "文章", "測驗", "題目"
         ).any { request.contains(it, ignoreCase = true) }
-        if (!needsAppData) return emptyList()
-        val editableIds = _assistantSelectedDeckIds.value
+        // A custom scope is an explicit request to let the assistant read those folders.  Do not
+        // silently return an empty context merely because the wording did not contain a keyword.
+        if (!needsAppData && editableIds.isEmpty()) return emptyList()
+        val scopedCards = if (editableIds.isEmpty()) cards else cards.filter { it.deckId in editableIds }
         val terms = request.lowercase()
             .split(Regex("[^a-zA-Z\u4e00-\u9fff]+"))
             .filter { it.length >= 2 }
             .toSet()
-        return cards.sortedByDescending { card ->
+        // Take a balanced sample so that one large folder cannot crowd every other selected
+        // folder out of the prompt. This also keeps token use predictable.
+        if (editableIds.size > 1 && terms.isEmpty()) {
+            val perDeck = (80 / editableIds.size).coerceAtLeast(4)
+            return editableIds.sorted().flatMap { deckId ->
+                scopedCards.filter { it.deckId == deckId }.take(perDeck)
+            }.take(80)
+        }
+        return scopedCards.sortedByDescending { card ->
             val searchable = "${card.word} ${card.definition} ${card.partOfSpeech}".lowercase()
-            terms.count { it in searchable } * 10 + if (card.deckId in editableIds) 1 else 0
+            terms.count { it in searchable } * 10
         }.take(80)
     }
 

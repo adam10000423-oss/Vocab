@@ -143,8 +143,19 @@ fun CardListScreen(
     var isMultiSelectMode by remember { mutableStateOf(false) }
     val selectedCards = remember { mutableStateListOf<Flashcard>() }
     var showBulkDeleteConfirm by remember { mutableStateOf(false) }
+    var cardPendingDelete by remember { mutableStateOf<Flashcard?>(null) }
     var showMoveCardsDialog by remember { mutableStateOf(false) }
     var showCreateMoveFolderDialog by remember { mutableStateOf(false) }
+
+    cardPendingDelete?.let { card ->
+        AlertDialog(
+            onDismissRequest = { cardPendingDelete = null },
+            title = { Text("刪除單字卡？") },
+            text = { Text("確定要刪除「${card.word}」嗎？這個動作無法復原。") },
+            confirmButton = { Button(onClick = { onDeleteCard(card); cardPendingDelete = null }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("刪除") } },
+            dismissButton = { TextButton(onClick = { cardPendingDelete = null }) { Text("取消") } }
+        )
+    }
 
     val activeDeck = decks.firstOrNull { it.id == selectedDeckId }
     LaunchedEffect(selectedDeckId) {
@@ -746,7 +757,7 @@ fun CardListScreen(
                                     if (isSelected) selectedCards.remove(card) else selectedCards.add(card)
                                 },
                                 onToggleFavorite = { onToggleFavorite(card) },
-                                onDeleteCard = { onDeleteCard(card) },
+                                onDeleteCard = { cardPendingDelete = card },
                                 onEditCard = { onEditCard(card) },
                                 onSpeak = { onSpeak(card.word) },
                                 onPracticePronunciation = {},

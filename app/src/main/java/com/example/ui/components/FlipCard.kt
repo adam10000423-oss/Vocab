@@ -64,6 +64,9 @@ fun FlipCard(
     onToggleFavorite: () -> Unit,
     onSwipeLeft: (() -> Unit)? = null,
     onSwipeRight: (() -> Unit)? = null,
+    swipeEnabled: Boolean = true,
+    showFavorite: Boolean = true,
+    showSwipeHint: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val responsive = rememberResponsiveLayout()
@@ -81,10 +84,8 @@ fun FlipCard(
         label = "cardFlipAnimation"
     )
 
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .pointerInput(card.id) {
+    val gestureModifier = if (swipeEnabled) {
+        Modifier.pointerInput(card.id) {
                 detectHorizontalDragGestures(
                     onDragEnd = {
                         if (offsetX > 150f) {
@@ -101,6 +102,11 @@ fun FlipCard(
                     }
                 )
             }
+    } else Modifier
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .then(gestureModifier)
     ) {
         Card(
             modifier = Modifier
@@ -145,15 +151,17 @@ fun FlipCard(
                             )
                         }
 
-                        IconButton(
-                            onClick = onToggleFavorite,
-                            modifier = Modifier.testTag("favorite_star_button")
-                        ) {
-                            Icon(
-                                imageVector = if (card.isFavorite) Icons.Filled.Star else Icons.Outlined.StarBorder,
-                                contentDescription = if (card.isFavorite) "取消收藏" else "加入收藏",
-                                tint = if (card.isFavorite) Color(0xFFFFB800) else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                        if (showFavorite) {
+                            IconButton(
+                                onClick = onToggleFavorite,
+                                modifier = Modifier.testTag("favorite_star_button")
+                            ) {
+                                Icon(
+                                    imageVector = if (card.isFavorite) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                                    contentDescription = if (card.isFavorite) "取消收藏" else "加入收藏",
+                                    tint = if (card.isFavorite) Color(0xFFFFB800) else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
 
@@ -215,12 +223,14 @@ fun FlipCard(
                     }
 
                     // Hint at bottom
-                    Text(
-                        text = "左滑：不熟  ·  右滑：記得",
-                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.align(Alignment.BottomCenter)
-                    )
+                    if (showSwipeHint) {
+                        Text(
+                            text = "左滑：不熟  ·  右滑：記得",
+                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.align(Alignment.BottomCenter)
+                        )
+                    }
                 }
             } else {
                 // BACK SIDE OF CARD (Definition & Example Sentence)
@@ -328,7 +338,7 @@ fun FlipCard(
         }
 
         // SWIPE BADGE OVERLAYS
-        if (animatedOffsetX > 50f) {
+        if (swipeEnabled && animatedOffsetX > 50f) {
             Surface(
                 color = MaterialTheme.colorScheme.primary,
                 shape = RoundedCornerShape(16.dp),
@@ -343,7 +353,7 @@ fun FlipCard(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                 )
             }
-        } else if (animatedOffsetX < -50f) {
+        } else if (swipeEnabled && animatedOffsetX < -50f) {
             Surface(
                 color = MaterialTheme.colorScheme.error,
                 shape = RoundedCornerShape(16.dp),
