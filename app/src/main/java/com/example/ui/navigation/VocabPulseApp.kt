@@ -29,6 +29,7 @@ import com.example.data.entity.GrammarNote
 import com.example.data.entity.GrammarQuestion
 import com.example.data.entity.GrammarDraft
 import com.example.data.entity.GrammarQuizResult
+import com.example.data.entity.GrammarLibrary
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.ui.unit.dp
 import com.example.ui.screens.AddEditCardScreen
@@ -63,6 +64,10 @@ import com.example.ui.screens.GrammarImportPreviewScreen
 import com.example.ui.screens.GrammarNoteDetailScreen
 import com.example.ui.screens.GrammarWritingCheckScreen
 import com.example.ui.screens.GrammarSearchScreen
+import com.example.ui.screens.GrammarLibrariesScreen
+import com.example.ui.screens.GrammarLibraryManageScreen
+import com.example.ui.screens.ReadingLibraryScreen
+import com.example.ui.screens.WritingLibraryScreen
 import com.example.viewmodel.VocabularyViewModel
 import com.example.util.GitHubUpdateManager
 import com.example.util.UpdateCheckResult
@@ -90,6 +95,7 @@ object Routes {
     const val GRAMMAR_IMPORT = "grammar_import"
     const val GRAMMAR_IMPORT_PREVIEW = "grammar_import_preview"
     const val GRAMMAR_QUIZ_RESULT = "grammar_quiz_result"
+    const val GRAMMAR_LIBRARY_MANAGE = "grammar_library_manage"
 }
 
 @Composable
@@ -134,6 +140,7 @@ fun VocabApp(
     val grammarExamples by viewModel.allGrammarExamples.collectAsStateWithLifecycle()
     val grammarWeaknesses by viewModel.grammarWeaknesses.collectAsStateWithLifecycle()
     val grammarWritingRecords by viewModel.grammarWritingRecords.collectAsStateWithLifecycle()
+    val grammarLibraries by viewModel.grammarLibraries.collectAsStateWithLifecycle()
 
     var currentTab by remember { mutableIntStateOf(0) }
     var editingCard by remember { mutableStateOf<Flashcard?>(null) }
@@ -160,6 +167,11 @@ fun VocabApp(
     var customQuizTitle by remember { mutableStateOf("") }
     var customQuizQuestions by remember { mutableStateOf<List<GrammarQuestion>?>(null) }
     var generatingAiTopic by remember { mutableStateOf<String?>(null) }
+    var selectedGrammarLibraryId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var pendingGrammarCourse by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingGrammarLibraryName by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedArticleId by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedWritingRecordId by rememberSaveable { mutableStateOf<Long?>(null) }
     val updateCheckScope = rememberCoroutineScope()
     val appContext = LocalContext.current.applicationContext
 
@@ -313,7 +325,7 @@ fun VocabApp(
                                 navController.navigate(Routes.GRAMMAR_QUIZ)
                             },
                             onWritingCheck = {
-                                currentTab = 3
+                                currentTab = 4
                                 navController.navigate(Routes.GRAMMAR_WRITING_CHECK)
                             },
                             onSeeAllNotes = { currentTab = 1 }
@@ -379,18 +391,23 @@ fun VocabApp(
                 },
                 foldersContent = {
                     if (grammarMode) {
-                        GrammarNotesScreen(
+                        GrammarLibrariesScreen(
+                            libraries = grammarLibraries,
                             notes = grammarNotes,
-                            onAdd = {
-                                editingGrammar = null
-                                launchGrammarAi = false
-                                navController.navigate(Routes.GRAMMAR_EDITOR)
-                            },
-                            onImport = { navController.navigate(Routes.GRAMMAR_IMPORT) },
-                            onReorderNotes = viewModel::reorderGrammarNotes,
-                            onOpen = { note ->
-                                selectedGrammarId = note.id
-                                navController.navigate(Routes.GRAMMAR_DETAIL)
+                            sharedCourses = decks.map { it.category },
+                            highlightedAction = "manage",
+                            onAdd = viewModel::addGrammarLibrary,
+                            onUpdate = viewModel::updateGrammarLibrary,
+                            onDelete = viewModel::deleteGrammarLibrary,
+                            onReorder = viewModel::reorderGrammarLibraries,
+                            onManage = { library -> selectedGrammarLibraryId = library.id; navController.navigate(Routes.GRAMMAR_LIBRARY_MANAGE) },
+                            onLearn = { library -> grammarNotes.firstOrNull { it.course == library.course && it.folder == library.name }?.let { selectedGrammarId = it.id; navController.navigate(Routes.GRAMMAR_LEARN) } },
+                            onQuiz = { library ->
+                                val ids = grammarNotes.filter { it.course == library.course && it.folder == library.name }.map { it.id }.toSet()
+                                customQuizTitle = library.name
+                                customQuizQuestions = grammarQuestions.filter { it.grammarNoteId in ids }
+                                selectedGrammarId = ids.firstOrNull()
+                                navController.navigate(Routes.GRAMMAR_QUIZ)
                             }
                         )
                     } else FoldersManagementScreen(
@@ -428,20 +445,23 @@ fun VocabApp(
                 },
                 studyContent = {
                     if (grammarMode) {
-                        GrammarStudyHubScreen(
+                        GrammarLibrariesScreen(
+                            libraries = grammarLibraries,
                             notes = grammarNotes,
-                            onLearn = { note ->
-                                selectedGrammarId = note.id
-                                navController.navigate(Routes.GRAMMAR_LEARN)
-                            },
-                            onQuiz = { note ->
-                                selectedGrammarId = note.id
-                                grammarQuizFilterIds = null
+                            sharedCourses = decks.map { it.category },
+                            highlightedAction = "learn",
+                            onAdd = viewModel::addGrammarLibrary,
+                            onUpdate = viewModel::updateGrammarLibrary,
+                            onDelete = viewModel::deleteGrammarLibrary,
+                            onReorder = viewModel::reorderGrammarLibraries,
+                            onManage = { library -> selectedGrammarLibraryId = library.id; navController.navigate(Routes.GRAMMAR_LIBRARY_MANAGE) },
+                            onLearn = { library -> grammarNotes.firstOrNull { it.course == library.course && it.folder == library.name }?.let { selectedGrammarId = it.id; navController.navigate(Routes.GRAMMAR_LEARN) } },
+                            onQuiz = { library ->
+                                val ids = grammarNotes.filter { it.course == library.course && it.folder == library.name }.map { it.id }.toSet()
+                                customQuizTitle = library.name
+                                customQuizQuestions = grammarQuestions.filter { it.grammarNoteId in ids }
+                                selectedGrammarId = ids.firstOrNull()
                                 navController.navigate(Routes.GRAMMAR_QUIZ)
-                            },
-                            onOpen = { note ->
-                                selectedGrammarId = note.id
-                                navController.navigate(Routes.GRAMMAR_DETAIL)
                             }
                         )
                     } else StudyHubScreen(
@@ -485,51 +505,24 @@ fun VocabApp(
                 },
                 quizContent = {
                     if (grammarMode) {
-                        GrammarQuizHubScreen(
+                        GrammarLibrariesScreen(
+                            libraries = grammarLibraries,
                             notes = grammarNotes,
-                            questions = grammarQuestions,
-                            weaknesses = grammarWeaknesses,
-                            onStartTopicQuiz = { topic, topicQuestions ->
-                                customQuizTitle = "【$topic】文法特訓"
-                                customQuizQuestions = topicQuestions
-                                selectedGrammarId = topicQuestions.firstOrNull()?.grammarNoteId
-                                grammarQuizFilterIds = null
+                            sharedCourses = decks.map { it.category },
+                            highlightedAction = "quiz",
+                            onAdd = viewModel::addGrammarLibrary,
+                            onUpdate = viewModel::updateGrammarLibrary,
+                            onDelete = viewModel::deleteGrammarLibrary,
+                            onReorder = viewModel::reorderGrammarLibraries,
+                            onManage = { library -> selectedGrammarLibraryId = library.id; navController.navigate(Routes.GRAMMAR_LIBRARY_MANAGE) },
+                            onLearn = { library -> grammarNotes.firstOrNull { it.course == library.course && it.folder == library.name }?.let { selectedGrammarId = it.id; navController.navigate(Routes.GRAMMAR_LEARN) } },
+                            onQuiz = { library ->
+                                val ids = grammarNotes.filter { it.course == library.course && it.folder == library.name }.map { it.id }.toSet()
+                                customQuizTitle = library.name
+                                customQuizQuestions = grammarQuestions.filter { it.grammarNoteId in ids }
+                                selectedGrammarId = ids.firstOrNull()
                                 navController.navigate(Routes.GRAMMAR_QUIZ)
-                            },
-                            onGenerateAiTopicQuiz = { topic ->
-                                generatingAiTopic = topic
-                                updateCheckScope.launch {
-                                    runCatching {
-                                        viewModel.generateGrammarDraft("請為【$topic】產生一篇包含核心語法與 6 題精選練習題的繁體中文文法筆記。課程填寫：$topic")
-                                    }.onSuccess { draft ->
-                                        viewModel.saveGrammarNoteBundle(
-                                            GrammarNote(
-                                                title = draft.title,
-                                                summary = draft.summary,
-                                                structure = draft.structure,
-                                                usage = draft.usage,
-                                                exampleSentence = draft.exampleSentence,
-                                                exampleTranslation = draft.exampleTranslation,
-                                                commonMistakes = draft.commonMistakes,
-                                                comparison = draft.comparison,
-                                                tags = draft.tags,
-                                                course = topic
-                                            ),
-                                            draft.questions,
-                                            draft.patterns
-                                        ) { id ->
-                                            generatingAiTopic = null
-                                            selectedGrammarId = id
-                                            navController.navigate(Routes.GRAMMAR_DETAIL)
-                                        }
-                                    }.onFailure {
-                                        generatingAiTopic = null
-                                    }
-                                }
-                            },
-                            onWritingCheck = viewModel::checkGrammarWriting,
-                            onAcceptWritingIssue = viewModel::acceptGrammarWritingIssue,
-                            onOpenWritingCheck = { navController.navigate(Routes.GRAMMAR_WRITING_CHECK) }
+                            }
                         )
                     } else QuizGamesScreen(
                         cards = allCards,
@@ -562,6 +555,37 @@ fun VocabApp(
                         },
                         showHubTopBar = false
                     )
+                },
+                libraryToolContent = {
+                    if (grammarMode) {
+                        WritingLibraryScreen(
+                            records = grammarWritingRecords,
+                            onNew = { selectedWritingRecordId = null; navController.navigate(Routes.GRAMMAR_WRITING_CHECK) },
+                            onImport = { selectedWritingRecordId = null; navController.navigate(Routes.GRAMMAR_WRITING_CHECK) },
+                            onOpen = { record -> selectedWritingRecordId = record.id; navController.navigate(Routes.GRAMMAR_WRITING_CHECK) }
+                        )
+                    } else {
+                        val articles = assistantMessages.filter { it.role == "ASSISTANT" && it.kind == "ARTICLE" }.sortedByDescending { it.createdAt }
+                        ReadingLibraryScreen(
+                            decks = decks,
+                            articleMessages = articles,
+                            onGenerate = { deck ->
+                                selectedArticleId = null
+                                readingStartedAt = System.currentTimeMillis()
+                                viewModel.openAssistant(deck.id)
+                                navController.navigate(Routes.GENERATED_READING)
+                                viewModel.sendAssistantMessage("請根據資料夾「${deck.name}」產生一篇自然的互動閱讀文章，優先使用待複習與不熟悉的目標單字，附繁體中文逐句翻譯與 5 題閱讀理解。")
+                            },
+                            onImport = { source ->
+                                selectedArticleId = null
+                                readingStartedAt = System.currentTimeMillis()
+                                viewModel.openAssistant(null)
+                                navController.navigate(Routes.GENERATED_READING)
+                                viewModel.sendAssistantMessage("請保留以下英文文章原文，只整理標題、段落、繁體中文逐句翻譯與 5 題閱讀理解；不要改寫原文。若內容是公開網址，請明確指出無法直接讀取時需要使用者貼上內文。\n\n$source")
+                            },
+                            onOpenArticle = { message -> selectedArticleId = message.id; navController.navigate(Routes.GENERATED_READING) }
+                        )
+                    }
                 }
             )
         }
@@ -687,9 +711,10 @@ fun VocabApp(
         }
 
         composable(Routes.GENERATED_READING) {
-            val article = assistantMessages.lastOrNull {
-                it.role == "ASSISTANT" && it.kind == "ARTICLE" && it.createdAt >= readingStartedAt
-            }
+            val article = selectedArticleId?.let { id -> assistantMessages.firstOrNull { it.id == id } }
+                ?: assistantMessages.lastOrNull {
+                    it.role == "ASSISTANT" && it.kind == "ARTICLE" && it.createdAt >= readingStartedAt
+                }
             if (article == null) {
                 val failure = assistantMessages.lastOrNull {
                     it.role == "ASSISTANT" && it.createdAt >= readingStartedAt && it.kind != "ARTICLE"
@@ -711,6 +736,35 @@ fun VocabApp(
                     onReadingMistake = viewModel::recordReadingMistake,
                     onCopyCardToDeck = viewModel::copyCardToDeck,
                     onCreateFolderAndCopyCard = viewModel::createFolderAndCopyCard,
+                    onBack = { selectedArticleId = null; navController.popBackStack() }
+                )
+            }
+        }
+
+        composable(Routes.GRAMMAR_LIBRARY_MANAGE) {
+            val library = grammarLibraries.firstOrNull { it.id == selectedGrammarLibraryId }
+            if (library == null) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            } else {
+                val libraryNotes = grammarNotes.filter { it.course == library.course && it.folder == library.name }
+                GrammarLibraryManageScreen(
+                    library = library,
+                    notes = libraryNotes,
+                    onEdit = { note ->
+                        editingGrammar = note
+                        pendingGrammarCourse = library.course
+                        pendingGrammarLibraryName = library.name
+                        navController.navigate(Routes.GRAMMAR_EDITOR)
+                    },
+                    onDelete = { note -> viewModel.deleteGrammarNote(note) },
+                    onReorder = viewModel::reorderGrammarNotes,
+                    onAdd = {
+                        editingGrammar = null
+                        pendingGrammarCourse = library.course
+                        pendingGrammarLibraryName = library.name
+                        launchGrammarAi = false
+                        navController.navigate(Routes.GRAMMAR_EDITOR)
+                    },
                     onBack = { navController.popBackStack() }
                 )
             }
@@ -968,6 +1022,8 @@ fun VocabApp(
                 folders = grammarNotes.map { it.folder }.filter(String::isNotBlank).distinct(),
                 categories = grammarNotes.map { it.category }.filter(String::isNotBlank).distinct(),
                 levels = grammarNotes.map { it.level }.filter(String::isNotBlank).distinct(),
+                initialCourse = pendingGrammarCourse,
+                initialFolder = pendingGrammarLibraryName,
                 initialShowAiDialog = launchGrammarAi,
                 onGenerateAi = viewModel::generateGrammarDraft,
                 onScanImages = viewModel::generateGrammarDraftFromImages,
@@ -981,7 +1037,7 @@ fun VocabApp(
                         pendingGrammarDraft = null
                     }
                 },
-                onBack = { launchGrammarAi = false; pendingGrammarDraft = null; navController.popBackStack() }
+                onBack = { launchGrammarAi = false; pendingGrammarDraft = null; pendingGrammarCourse = null; pendingGrammarLibraryName = null; navController.popBackStack() }
             )
         }
 
@@ -1089,7 +1145,8 @@ fun VocabApp(
                     viewModel.saveGrammarWritingRecord(title, course, original, revised, issues)
                 },
                 onDeleteRecord = viewModel::deleteGrammarWritingRecord,
-                onBack = { navController.popBackStack() }
+                onBack = { selectedWritingRecordId = null; navController.popBackStack() },
+                initialRecordId = selectedWritingRecordId
             )
         }
     }

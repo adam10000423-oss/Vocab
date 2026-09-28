@@ -13,6 +13,7 @@ import com.example.data.dao.GrammarNoteDao
 import com.example.data.dao.GrammarQuestionDao
 import com.example.data.dao.GrammarContentDao
 import com.example.data.dao.GrammarWritingDao
+import com.example.data.dao.GrammarLibraryDao
 import com.example.data.entity.Deck
 import com.example.data.entity.Flashcard
 import com.example.data.entity.StudyLog
@@ -22,10 +23,11 @@ import com.example.data.entity.GrammarWeakness
 import com.example.data.entity.GrammarPattern
 import com.example.data.entity.GrammarExample
 import com.example.data.entity.GrammarWritingRecord
+import com.example.data.entity.GrammarLibrary
 
 @Database(
-    entities = [Deck::class, Flashcard::class, StudyLog::class, GrammarNote::class, GrammarQuestion::class, GrammarWeakness::class, GrammarPattern::class, GrammarExample::class, GrammarWritingRecord::class],
-    version = 10,
+    entities = [Deck::class, Flashcard::class, StudyLog::class, GrammarNote::class, GrammarQuestion::class, GrammarWeakness::class, GrammarPattern::class, GrammarExample::class, GrammarWritingRecord::class, GrammarLibrary::class],
+    version = 11,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -36,6 +38,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun grammarQuestionDao(): GrammarQuestionDao
     abstract fun grammarContentDao(): GrammarContentDao
     abstract fun grammarWritingDao(): GrammarWritingDao
+    abstract fun grammarLibraryDao(): GrammarLibraryDao
 
     companion object {
         val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -247,6 +250,31 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_grammar_writing_records_updatedAt ON grammar_writing_records(updatedAt)")
             }
         }
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS grammar_libraries (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        course TEXT NOT NULL,
+                        name TEXT NOT NULL,
+                        description TEXT NOT NULL,
+                        colorHex TEXT NOT NULL,
+                        createdAt INTEGER NOT NULL,
+                        sortOrder INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    INSERT INTO grammar_libraries (course, name, description, colorHex, createdAt, sortOrder)
+                    SELECT course, folder, '', '#426B63', MIN(createdAt), MIN(sortOrder)
+                    FROM grammar_notes
+                    GROUP BY course, folder
+                    """.trimIndent()
+                )
+            }
+        }
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -265,7 +293,8 @@ abstract class AppDatabase : RoomDatabase() {
                     MIGRATION_6_7,
                     MIGRATION_7_8,
                     MIGRATION_8_9,
-                    MIGRATION_9_10
+                    MIGRATION_9_10,
+                    MIGRATION_10_11
                 ).build()
                 INSTANCE = instance
                 instance

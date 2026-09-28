@@ -25,8 +25,8 @@ android {
     applicationId = "com.aistudio.vocabpulse.srsapp"
     minSdk = 24
     targetSdk = 36
-        versionCode = 23
-        versionName = "2.9.0"
+        versionCode = 24
+        versionName = "2.10.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     buildConfigField("String", "BACKEND_BASE_URL", "\"${backendBaseUrl.trimEnd('/')}\"")
@@ -47,8 +47,11 @@ android {
   buildTypes {
     release {
       isCrunchPngs = false
-      isMinifyEnabled = true
-      isShrinkResources = true
+      // ML Kit's document scanner is delivered dynamically by Google Play services.
+      // Resource/code shrinking made the published 2.8/2.9 builds report supported
+      // phones as unsupported, so keep the proven 2.7.1 release configuration.
+      isMinifyEnabled = false
+      isShrinkResources = false
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       if (hasReleaseSigning) {
         signingConfig = signingConfigs.getByName("release")

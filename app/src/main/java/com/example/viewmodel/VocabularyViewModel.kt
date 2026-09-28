@@ -27,6 +27,7 @@ import com.example.data.entity.GrammarPattern
 import com.example.data.entity.GrammarPatternDraft
 import com.example.data.entity.GrammarExample
 import com.example.data.entity.GrammarExampleDraft
+import com.example.data.entity.GrammarLibrary
 import com.example.data.importer.ExternalCardCandidate
 import com.example.data.importer.AiExternalFormattingResult
 import com.example.data.learning.LearningSessionStore
@@ -130,6 +131,11 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
         initialValue = emptyList()
     )
     val allGrammarNotes: StateFlow<List<GrammarNote>> = db.grammarNoteDao().getAll().stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+    val grammarLibraries: StateFlow<List<GrammarLibrary>> = db.grammarLibraryDao().getAll().stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = emptyList()
@@ -323,10 +329,18 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
                 db.withTransaction {
                     val normalized = note.copy(
                         course = note.course.trim().ifBlank { "通用" },
+                        folder = note.folder.trim().ifBlank { "未分類" },
                         title = note.title.trim(),
                         updatedAt = System.currentTimeMillis()
                     )
                     require(normalized.title.isNotBlank()) { "請輸入文法名稱" }
+                    if (db.grammarLibraryDao().getAllOnce().none {
+                            it.course.equals(normalized.course, true) && it.name.equals(normalized.folder, true)
+                        }) {
+                        db.grammarLibraryDao().insert(
+                            GrammarLibrary(course = normalized.course, name = normalized.folder)
+                        )
+                    }
                     questions.forEach(::validateGrammarQuestion)
                     val noteId = if (normalized.id == 0L) db.grammarNoteDao().insert(normalized)
                     else {
@@ -403,6 +417,11 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
                     drafts.filter { it.title.isNotBlank() }.forEach { draft ->
                         draft.questions.forEach(::validateGrammarQuestion)
                         val normalizedCourse = course.trim().ifBlank { "通用" }
+                        if (db.grammarLibraryDao().getAllOnce().none {
+                                it.course.equals(normalizedCourse, true) && it.name.equals("未分類", true)
+                            }) {
+                            db.grammarLibraryDao().insert(GrammarLibrary(course = normalizedCourse, name = "未分類"))
+                        }
                         val existing = db.grammarNoteDao().getAllOnce().firstOrNull {
                             it.course.equals(normalizedCourse, true) && it.title.equals(draft.title.trim(), true)
                         }
@@ -1011,6 +1030,70 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
+    fun addGrammarLibrary(course: String, name: String, description: String, colorHex: String) {
+        viewModelScope.launch {
+            val cleanCourse = course.trim().ifBlank { "通用" }
+            val cleanName = name.trim()
+            if (cleanName.isBlank()) return@launch
+            val duplicate = db.grammarLibraryDao().getAllOnce().any {
+                it.course.equals(cleanCourse, true) && it.name.equals(cleanName, true)
+            }
+            if (duplicate) {
+                _dataMessage.value = "這個課程已有同名文法庫"
+            } else {
+                db.grammarLibraryDao().insert(
+                    GrammarLibrary(course = cleanCourse, name = cleanName, description = description.trim(), colorHex = colorHex)
+                )
+            }
+        }
+    }
+
+    fun updateGrammarLibrary(library: GrammarLibrary) {
+        viewModelScope.launch {
+            db.withTransaction {
+                val previous = db.grammarLibraryDao().getAllOnce().firstOrNull { it.id == library.id }
+                if (previous != null && (previous.course != library.course || previous.name != library.name)) {
+                    db.grammarNoteDao().renameLibrary(previous.course, previous.name, library.name, System.currentTimeMillis())
+                    if (previous.course != library.course) {
+                        db.grammarNoteDao().getAllOnce()
+                            .filter { it.course == previous.course && it.folder == library.name }
+                            .forEach { db.grammarNoteDao().update(it.copy(course = library.course, updatedAt = System.currentTimeMillis())) }
+                    }
+                }
+                db.grammarLibraryDao().update(library)
+            }
+        }
+    }
+
+    fun deleteGrammarLibrary(library: GrammarLibrary) {
+        viewModelScope.launch {
+            db.withTransaction {
+                val notes = db.grammarNoteDao().getAllOnce().filter { it.course == library.course && it.folder == library.name }
+                notes.forEach { note ->
+                    db.grammarQuestionDao().deleteForNote(note.id)
+                    db.grammarContentDao().deleteExamplesForNote(note.id)
+                    db.grammarContentDao().deletePatternsForNote(note.id)
+                    db.grammarNoteDao().delete(note)
+                }
+                db.grammarLibraryDao().delete(library)
+            }
+        }
+    }
+
+    fun reorderGrammarLibraries(ids: List<Long>) {
+        if (ids.isEmpty()) return
+        viewModelScope.launch {
+            val all = db.grammarLibraryDao().getAllOnce()
+            val requested = ids.mapNotNull { id -> all.firstOrNull { it.id == id } }
+            if (requested.size == ids.size) {
+                val selected = ids.toSet()
+                var index = 0
+                val merged = all.map { if (it.id in selected) requested[index++] else it }
+                db.grammarLibraryDao().updateAll(merged.mapIndexed { order, item -> item.copy(sortOrder = order.toLong()) })
+            }
+        }
+    }
+
     fun renameCourse(oldName: String, newName: String, onComplete: (Boolean) -> Unit = {}) {
         viewModelScope.launch {
             val success = runCatching {
@@ -1527,6 +1610,8 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
                 db.grammarContentDao().deleteAllExamples()
                 db.grammarContentDao().deleteAllPatterns()
                 db.grammarNoteDao().deleteAll()
+                db.grammarWritingDao().deleteAll()
+                db.grammarLibraryDao().deleteAll()
                 settingsRepository.resetAfterDataClear()
                 aiCredentialsStore.clear()
                 learningSessionStore.clearAll()

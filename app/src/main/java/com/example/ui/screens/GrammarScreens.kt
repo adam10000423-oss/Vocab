@@ -570,10 +570,10 @@ private fun GrammarEditableMenu(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun GrammarEditorScreen(note: GrammarNote?, initialDraft: GrammarDraft? = null, questions: List<GrammarQuestion>, patterns: List<GrammarPattern>, examples: List<GrammarExample>, courses: List<String>, folders: List<String> = emptyList(), categories: List<String> = emptyList(), levels: List<String> = emptyList(), initialShowAiDialog: Boolean = false, onGenerateAi: suspend (String) -> GrammarDraft, onScanImages: suspend (List<Uri>) -> GrammarDraft, onSave: (GrammarNote, List<GrammarQuestionDraft>, List<GrammarPatternDraft>) -> Unit, onBack: () -> Unit) {
+fun GrammarEditorScreen(note: GrammarNote?, initialDraft: GrammarDraft? = null, questions: List<GrammarQuestion>, patterns: List<GrammarPattern>, examples: List<GrammarExample>, courses: List<String>, folders: List<String> = emptyList(), categories: List<String> = emptyList(), levels: List<String> = emptyList(), initialCourse: String? = null, initialFolder: String? = null, initialShowAiDialog: Boolean = false, onGenerateAi: suspend (String) -> GrammarDraft, onScanImages: suspend (List<Uri>) -> GrammarDraft, onSave: (GrammarNote, List<GrammarQuestionDraft>, List<GrammarPatternDraft>) -> Unit, onBack: () -> Unit) {
     val context = LocalContext.current; val scope = rememberCoroutineScope()
-    var course by rememberSaveable(note?.id) { mutableStateOf(note?.course ?: courses.firstOrNull().orEmpty()) }
-    var folder by rememberSaveable(note?.id) { mutableStateOf(note?.folder ?: "未分類") }
+    var course by rememberSaveable(note?.id, initialCourse) { mutableStateOf(note?.course ?: initialCourse ?: courses.firstOrNull().orEmpty()) }
+    var folder by rememberSaveable(note?.id, initialFolder) { mutableStateOf(note?.folder ?: initialFolder ?: "未分類") }
     var title by rememberSaveable(note?.id) { mutableStateOf(note?.title ?: initialDraft?.title.orEmpty()) }
     val linkedCourses = remember(courses) { (listOf("通用") + courses).filter(String::isNotBlank).distinct() }
     val linkedFolders = remember(folders, course, note?.folder) { (listOf("未分類") + folders + note?.folder.orEmpty()).filter(String::isNotBlank).distinct() }
@@ -634,7 +634,7 @@ fun GrammarEditorScreen(note: GrammarNote?, initialDraft: GrammarDraft? = null, 
         title = { Text("新增${customField}") },
         text = { OutlinedTextField(customValue, { customValue = it }, singleLine = true, label = { Text(customField.orEmpty()) }) },
         confirmButton = { Button(enabled = customValue.isNotBlank(), onClick = {
-            when (customField) { "課程" -> course = customValue.trim(); "資料夾" -> folder = customValue.trim(); "分類" -> category = customValue.trim(); "程度" -> level = customValue.trim() }
+            when (customField) { "課程" -> course = customValue.trim(); "文法庫" -> folder = customValue.trim(); "分類" -> category = customValue.trim(); "程度" -> level = customValue.trim() }
             customValue = ""; customField = null
         }) { Text("套用") } },
         dismissButton = { TextButton(onClick = { customField = null }) { Text("取消") } }
@@ -661,7 +661,7 @@ fun GrammarEditorScreen(note: GrammarNote?, initialDraft: GrammarDraft? = null, 
                     if(busy)Card(colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.primaryContainer)){Row(Modifier.fillMaxWidth().padding(14.dp),verticalAlignment=Alignment.CenterVertically){CircularProgressIndicator(Modifier.size(22.dp));Spacer(Modifier.width(10.dp));Text("AI 正在辨識並整理文法…")}}
                     error?.let{Text(it,color=MaterialTheme.colorScheme.error)}
                     GrammarEditableMenu("課程",course.ifBlank{"通用"},linkedCourses,{course=it},{customField="課程"})
-                    GrammarEditableMenu("資料夾",folder.ifBlank{"未分類"},linkedFolders,{folder=it},{customField="資料夾"})
+                    GrammarEditableMenu("文法庫",folder.ifBlank{"未分類"},linkedFolders,{folder=it},{customField="文法庫"})
                     OutlinedTextField(title,{title=it},label={Text("文法類型名稱 *")},singleLine=true,modifier=Modifier.fillMaxWidth())
                     Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
                         GrammarEditableMenu("分類",category,categoryOptions,{category=it},{customField="分類"},Modifier.weight(1f))
@@ -903,7 +903,8 @@ fun GrammarWritingCheckScreen(
     onDeleteRecord: (GrammarWritingRecord) -> Unit = {},
     onRecognizeSources: (suspend (List<Uri>) -> GrammarWritingScanResult)? = null,
     onBack: () -> Unit = {},
-    showTopBar: Boolean = true
+    showTopBar: Boolean = true,
+    initialRecordId: Long? = null
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -923,6 +924,10 @@ fun GrammarWritingCheckScreen(
     var courseMenu by remember { mutableStateOf(false) }
     var selectedRecord by remember { mutableStateOf<GrammarWritingRecord?>(null) }
     var recordPendingDelete by remember { mutableStateOf<GrammarWritingRecord?>(null) }
+
+    LaunchedEffect(initialRecordId, records) {
+        if (initialRecordId != null) selectedRecord = records.firstOrNull { it.id == initialRecordId }
+    }
 
     recordPendingDelete?.let { record ->
         AlertDialog(

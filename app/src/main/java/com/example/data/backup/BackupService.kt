@@ -13,6 +13,7 @@ import com.example.data.entity.GrammarWeakness
 import com.example.data.entity.GrammarPattern
 import com.example.data.entity.GrammarExample
 import com.example.data.entity.GrammarWritingRecord
+import com.example.data.entity.GrammarLibrary
 import com.example.data.learning.StudyCheckInStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -37,9 +38,10 @@ class BackupService(
         val grammarPatterns = database.grammarContentDao().getAllPatterns().first()
         val grammarExamples = database.grammarContentDao().getAllExamples().first()
         val grammarWritingRecords = database.grammarWritingDao().getAll().first()
+        val grammarLibraries = database.grammarLibraryDao().getAll().first()
         val root = JSONObject()
             .put("format", "vocab-backup")
-            .put("version", 7)
+            .put("version", 8)
             .put("exportedAt", System.currentTimeMillis())
             .put("decks", JSONArray().apply {
                 decks.forEach { deck ->
@@ -77,6 +79,13 @@ class BackupService(
                         .put("studyStep", note.studyStep).put("attemptCount", note.attemptCount)
                         .put("correctCount", note.correctCount).put("createdAt", note.createdAt)
                         .put("updatedAt", note.updatedAt).put("sortOrder", note.sortOrder))
+                }
+            })
+            .put("grammarLibraries", JSONArray().apply {
+                grammarLibraries.forEach { library -> put(JSONObject()
+                    .put("course", library.course).put("name", library.name)
+                    .put("description", library.description).put("colorHex", library.colorHex)
+                    .put("createdAt", library.createdAt).put("sortOrder", library.sortOrder))
                 }
             })
             .put("grammarPatterns", JSONArray().apply {
@@ -161,6 +170,7 @@ class BackupService(
         val grammarPatternItems = root.optJSONArray("grammarPatterns") ?: JSONArray()
         val grammarExampleItems = root.optJSONArray("grammarExamples") ?: JSONArray()
         val grammarWritingItems = root.optJSONArray("grammarWritingRecords") ?: JSONArray()
+        val grammarLibraryItems = root.optJSONArray("grammarLibraries") ?: JSONArray()
         var imported = 0
         database.withTransaction {
             val existingDecks = database.deckDao().getAllDecks().first().toMutableList()
@@ -226,6 +236,21 @@ class BackupService(
                 )
             }
             val existingGrammar = database.grammarNoteDao().getAllOnce()
+            val existingLibraries = database.grammarLibraryDao().getAllOnce().toMutableList()
+            for (index in 0 until grammarLibraryItems.length()) {
+                val item = grammarLibraryItems.optJSONObject(index) ?: continue
+                val course = item.optString("course", "通用").trim().ifBlank { "通用" }
+                val name = item.optString("name").trim()
+                if (name.isBlank() || existingLibraries.any { it.course.equals(course, true) && it.name.equals(name, true) }) continue
+                val library = GrammarLibrary(
+                    course = course, name = name, description = item.optString("description"),
+                    colorHex = item.optString("colorHex", "#426B63"),
+                    createdAt = item.optLong("createdAt", System.currentTimeMillis()),
+                    sortOrder = item.optLong("sortOrder", index.toLong())
+                )
+                database.grammarLibraryDao().insert(library)
+                existingLibraries.add(library)
+            }
             val grammarIdMap = mutableMapOf<Long, Long>()
             for (index in 0 until grammarItems.length()) {
                 val item = grammarItems.optJSONObject(index) ?: continue
@@ -254,6 +279,10 @@ class BackupService(
                     )
                 )
                 grammarIdMap[item.optLong("id")] = newGrammarId
+                val folder = item.optString("folder", "未分類").ifBlank { "未分類" }
+                if (database.grammarLibraryDao().getAllOnce().none { it.course.equals(course, true) && it.name.equals(folder, true) }) {
+                    database.grammarLibraryDao().insert(GrammarLibrary(course = course, name = folder))
+                }
                 // Version 3 and older stored one question directly on the note.
                 if (grammarQuestionItems.length() == 0 && item.optString("questionTemplate").isNotBlank() &&
                     database.grammarQuestionDao().getForNote(newGrammarId).isEmpty()

@@ -54,6 +54,7 @@ import kotlinx.coroutines.delay
 fun AddFolderDialog(
     existingCourses: List<String>,
     defaultCourse: String? = null,
+    itemLabel: String = "資料夾",
     onDismiss: () -> Unit,
     onConfirm: (courseName: String, folderName: String, description: String, colorHex: String) -> Unit
 ) {
@@ -91,7 +92,7 @@ fun AddFolderDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = "新增資料夾",
+                text = "新增$itemLabel",
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
             )
         },
@@ -180,7 +181,7 @@ fun AddFolderDialog(
 
                 // Folder Name Input
                 Text(
-                    text = "資料夾",
+                    text = itemLabel,
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.primary
                 )
@@ -249,7 +250,7 @@ fun AddFolderDialog(
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.testTag("confirm_create_folder_button")
             ) {
-                Text("建立資料夾", fontWeight = FontWeight.Bold)
+                Text("建立$itemLabel", fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {

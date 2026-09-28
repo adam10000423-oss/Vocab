@@ -37,4 +37,10 @@ interface GrammarNoteDao {
 
     @Query("UPDATE grammar_notes SET course = :newName, updatedAt = :updatedAt WHERE course = :oldName COLLATE NOCASE")
     suspend fun renameCourse(oldName: String, newName: String, updatedAt: Long): Int
+
+    @Query("UPDATE grammar_notes SET course = :course, folder = :newName, updatedAt = :updatedAt WHERE course = :course AND folder = :oldName")
+    suspend fun renameLibrary(course: String, oldName: String, newName: String, updatedAt: Long): Int
+
+    @Query("DELETE FROM grammar_notes WHERE course = :course AND folder = :folder")
+    suspend fun deleteLibraryNotes(course: String, folder: String): Int
 }

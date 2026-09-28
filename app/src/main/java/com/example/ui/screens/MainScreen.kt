@@ -25,6 +25,8 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Spellcheck
 import androidx.compose.material.icons.filled.Style
 import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.Article
+import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -66,6 +68,7 @@ fun MainScreen(
     foldersContent: @Composable () -> Unit,
     studyContent: @Composable () -> Unit,
     quizContent: @Composable () -> Unit,
+    libraryToolContent: @Composable () -> Unit = {},
     onOpenAssistant: () -> Unit = {},
     onOpenWordSearch: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
@@ -81,21 +84,23 @@ fun MainScreen(
         !responsive.isLargeText
     val pagerState = rememberPagerState(
         initialPage = currentTab,
-        pageCount = { 4 }
+        pageCount = { 5 }
     )
     val tabs = if (grammarMode) {
         listOf(
             MainTabSpec("總覽", Icons.Default.Home, "總覽", "nav_tab_home"),
             MainTabSpec("文法庫", Icons.Default.MenuBook, "文法庫", "nav_tab_folders"),
             MainTabSpec("學習", Icons.Default.Style, "學習", "nav_tab_study"),
-            MainTabSpec("測驗", Icons.Default.Quiz, "測驗", "nav_tab_quiz")
+            MainTabSpec("測驗", Icons.Default.Quiz, "測驗", "nav_tab_quiz"),
+            MainTabSpec("作文", Icons.Default.EditNote, "作文", "nav_tab_library_tool")
         )
     } else {
         listOf(
             MainTabSpec("主畫面", Icons.Default.Home, "主畫面", "nav_tab_home"),
             MainTabSpec("資料夾", Icons.Default.Folder, "資料夾", "nav_tab_folders"),
             MainTabSpec("學習", Icons.Default.Style, "學習", "nav_tab_study"),
-            MainTabSpec("測驗", Icons.Default.Extension, "測驗", "nav_tab_quiz")
+            MainTabSpec("測驗", Icons.Default.Extension, "測驗", "nav_tab_quiz"),
+            MainTabSpec("文章", Icons.Default.Article, "文章", "nav_tab_library_tool")
         )
     }
 
@@ -153,14 +158,16 @@ fun MainScreen(
                                             0 -> "文法總覽"
                                             1 -> "文法庫"
                                             2 -> "學習"
-                                            else -> "測驗"
+                                            3 -> "測驗"
+                                            else -> "作文"
                                         }
                                     } else {
                                         when (page) {
                                             0 -> "Vocab"
                                             1 -> "資料夾"
                                             2 -> "學習"
-                                            else -> "測驗"
+                                            3 -> "測驗"
+                                            else -> "文章"
                                         }
                                     },
                                     style = MaterialTheme.typography.titleMedium,
@@ -249,6 +256,7 @@ fun MainScreen(
                 1 -> foldersContent()
                 2 -> studyContent()
                 3 -> quizContent()
+                4 -> libraryToolContent()
             }
         }
     }
