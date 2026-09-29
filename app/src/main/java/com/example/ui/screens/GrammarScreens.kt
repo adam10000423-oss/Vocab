@@ -74,13 +74,11 @@ private fun GrammarCourseChips(
 @Composable
 fun GrammarDashboardScreen(
     notes: List<GrammarNote>,
-    weaknesses: List<GrammarWeakness>,
     onAdd: () -> Unit,
     onImport: () -> Unit,
     onOpen: (GrammarNote) -> Unit,
     onLearn: (GrammarNote) -> Unit,
     onQuiz: (GrammarNote) -> Unit,
-    onWritingCheck: () -> Unit,
     onSeeAllNotes: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -130,34 +128,9 @@ fun GrammarDashboardScreen(
 
         // Keep the same calm two-column action layout used by the word dashboard.
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    FilledTonalButton(onClick = onAdd, shape = RoundedCornerShape(18.dp), modifier = Modifier.weight(1f).height(54.dp)) { Icon(Icons.Default.Add, null); Spacer(Modifier.width(5.dp)); Text("新增文法") }
-                    FilledTonalButton(onClick = onImport, shape = RoundedCornerShape(18.dp), modifier = Modifier.weight(1f).height(54.dp)) { Icon(Icons.Default.DocumentScanner, null); Spacer(Modifier.width(5.dp)); Text("匯入") }
-                }
-                OutlinedButton(onClick = onWritingCheck, shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth().height(54.dp)) { Icon(Icons.Default.Spellcheck, null); Spacer(Modifier.width(5.dp)); Text("寫作檢查") }
-            }
-        }
-
-        // Weakness Summary Alert
-        if (weaknesses.isNotEmpty()) {
-            item {
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f))) {
-                    Row(
-                        Modifier.fillMaxWidth().padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.ErrorOutline, null, tint = MaterialTheme.colorScheme.error)
-                        Spacer(Modifier.width(10.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text("累積寫作弱點 ${weaknesses.size} 項", fontWeight = FontWeight.Bold)
-                            Text(weaknesses.take(2).joinToString("、") { it.title }, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
-                        TextButton(onClick = onWritingCheck) {
-                            Text("寫作練習")
-                        }
-                    }
-                }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                FilledTonalButton(onClick = onAdd, shape = RoundedCornerShape(18.dp), modifier = Modifier.weight(1f).height(54.dp)) { Icon(Icons.Default.Add, null); Spacer(Modifier.width(5.dp)); Text("新增文法") }
+                FilledTonalButton(onClick = onImport, shape = RoundedCornerShape(18.dp), modifier = Modifier.weight(1f).height(54.dp)) { Icon(Icons.Default.DocumentScanner, null); Spacer(Modifier.width(5.dp)); Text("匯入") }
             }
         }
 
@@ -922,50 +895,26 @@ fun GrammarWritingCheckScreen(
     var recordTitle by rememberSaveable { mutableStateOf("") }
     var recordCourse by rememberSaveable { mutableStateOf(courses.firstOrNull() ?: "通用") }
     var courseMenu by remember { mutableStateOf(false) }
-    var selectedRecord by remember { mutableStateOf<GrammarWritingRecord?>(null) }
-    var recordPendingDelete by remember { mutableStateOf<GrammarWritingRecord?>(null) }
 
     LaunchedEffect(initialRecordId, records) {
-        if (initialRecordId != null) selectedRecord = records.firstOrNull { it.id == initialRecordId }
-    }
-
-    recordPendingDelete?.let { record ->
-        AlertDialog(
-            onDismissRequest = { recordPendingDelete = null },
-            title = { Text("刪除作文紀錄？") },
-            text = { Text("「${record.title}」及完整批改結果將被刪除，這個動作無法復原。") },
-            confirmButton = { Button(onClick = { onDeleteRecord(record); recordPendingDelete = null; selectedRecord = null }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("刪除") } },
-            dismissButton = { TextButton(onClick = { recordPendingDelete = null }) { Text("取消") } }
-        )
-    }
-
-    selectedRecord?.let { record ->
-        AlertDialog(
-            onDismissRequest = { selectedRecord = null },
-            title = { Text(record.title) },
-            text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                AssistChip(onClick = {}, label = { Text(record.course) })
-                Text("原始作文", fontWeight = FontWeight.Bold); Text(record.originalText)
-                HorizontalDivider(); Text("修改後作文", fontWeight = FontWeight.Bold); Text(record.revisedText)
-                val savedIssues = runCatching { JSONArray(record.issuesJson) }.getOrNull()
-                val count = savedIssues?.length() ?: 0
-                Text("修改結果：$count 項", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                repeat(count) { index ->
-                    savedIssues?.optJSONObject(index)?.let { issue ->
-                        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .55f))) {
-                            Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                                Text(issue.optString("title", "修改建議"), fontWeight = FontWeight.Bold)
-                                Text("原文：${issue.optString("originalSentence", issue.optString("originalText"))}", color = MaterialTheme.colorScheme.error)
-                                Text("建議：${issue.optString("correctedSentence", issue.optString("correctedText"))}", color = MaterialTheme.colorScheme.primary)
-                                issue.optString("explanation").takeIf(String::isNotBlank)?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-                            }
-                        }
-                    }
+        records.firstOrNull { it.id == initialRecordId }?.let { record ->
+            recordTitle = record.title
+            recordCourse = record.course
+            originalText = record.originalText
+            text = record.revisedText
+            val saved = runCatching { JSONArray(record.issuesJson) }.getOrNull()
+            issues = buildList {
+                repeat(saved?.length() ?: 0) { index ->
+                    val item = saved?.optJSONObject(index) ?: return@repeat
+                    add(GrammarWritingIssue(
+                        ruleKey = item.optString("ruleKey"), title = item.optString("title"),
+                        originalSentence = item.optString("originalSentence"), correctedSentence = item.optString("correctedSentence"),
+                        originalText = item.optString("originalText"), correctedText = item.optString("correctedText"),
+                        explanation = item.optString("explanation")
+                    ))
                 }
-            } },
-            confirmButton = { TextButton(onClick = { selectedRecord = null }) { Text("完成") } },
-            dismissButton = { TextButton(onClick = { recordPendingDelete = record }) { Text("刪除", color = MaterialTheme.colorScheme.error) } }
-        )
+            }
+        }
     }
     if (showSaveDialog) AlertDialog(
         onDismissRequest = { showSaveDialog = false },
@@ -1124,27 +1073,6 @@ fun GrammarWritingCheckScreen(
                     }
                 }
             }
-            if (records.isNotEmpty()) {
-                item { Text("作文紀錄", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
-                items(records, key = { "writing-${it.id}" }) { record ->
-                    Card(
-                        onClick = { selectedRecord = record },
-                        shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
-                    ) {
-                        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text(record.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text(record.course, color = MaterialTheme.colorScheme.primary)
-                                val issueCount = runCatching { JSONArray(record.issuesJson).length() }.getOrDefault(0)
-                                Text("$issueCount 項修改", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            Icon(Icons.Default.ChevronRight, "查看")
-                        }
-                    }
-                }
-            }
-            if (weaknesses.isNotEmpty()) item { Text("已累積 ${weaknesses.size} 項寫作弱點", color = MaterialTheme.colorScheme.primary) }
         }
     }
 }

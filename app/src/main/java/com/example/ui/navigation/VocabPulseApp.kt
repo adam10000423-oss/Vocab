@@ -68,6 +68,7 @@ import com.example.ui.screens.GrammarLibrariesScreen
 import com.example.ui.screens.GrammarLibraryManageScreen
 import com.example.ui.screens.ReadingLibraryScreen
 import com.example.ui.screens.WritingLibraryScreen
+import com.example.ui.screens.WritingRecordDetailScreen
 import com.example.viewmodel.VocabularyViewModel
 import com.example.util.GitHubUpdateManager
 import com.example.util.UpdateCheckResult
@@ -92,6 +93,7 @@ object Routes {
     const val GRAMMAR_LEARN = "grammar_learn"
     const val GRAMMAR_QUIZ = "grammar_quiz"
     const val GRAMMAR_WRITING_CHECK = "grammar_writing_check"
+    const val WRITING_RECORD_DETAIL = "writing_record_detail"
     const val GRAMMAR_IMPORT = "grammar_import"
     const val GRAMMAR_IMPORT_PREVIEW = "grammar_import_preview"
     const val GRAMMAR_QUIZ_RESULT = "grammar_quiz_result"
@@ -304,7 +306,6 @@ fun VocabApp(
                     if (grammarMode) {
                         GrammarDashboardScreen(
                             notes = grammarNotes,
-                            weaknesses = grammarWeaknesses,
                             onAdd = {
                                 editingGrammar = null
                                 launchGrammarAi = false
@@ -323,10 +324,6 @@ fun VocabApp(
                                 selectedGrammarId = note.id
                                 grammarQuizFilterIds = null
                                 navController.navigate(Routes.GRAMMAR_QUIZ)
-                            },
-                            onWritingCheck = {
-                                currentTab = 4
-                                navController.navigate(Routes.GRAMMAR_WRITING_CHECK)
                             },
                             onSeeAllNotes = { currentTab = 1 }
                         )
@@ -562,7 +559,7 @@ fun VocabApp(
                             records = grammarWritingRecords,
                             onNew = { selectedWritingRecordId = null; navController.navigate(Routes.GRAMMAR_WRITING_CHECK) },
                             onImport = { selectedWritingRecordId = null; navController.navigate(Routes.GRAMMAR_WRITING_CHECK) },
-                            onOpen = { record -> selectedWritingRecordId = record.id; navController.navigate(Routes.GRAMMAR_WRITING_CHECK) }
+                            onOpen = { record -> selectedWritingRecordId = record.id; navController.navigate(Routes.WRITING_RECORD_DETAIL) }
                         )
                     } else {
                         val articles = assistantMessages.filter { it.role == "ASSISTANT" && it.kind == "ARTICLE" }.sortedByDescending { it.createdAt }
@@ -576,6 +573,13 @@ fun VocabApp(
                                 navController.navigate(Routes.GENERATED_READING)
                                 viewModel.sendAssistantMessage("請根據資料夾「${deck.name}」產生一篇自然的互動閱讀文章，優先使用待複習與不熟悉的目標單字，附繁體中文逐句翻譯與 5 題閱讀理解。")
                             },
+                            onGenerateTopic = { topic ->
+                                selectedArticleId = null
+                                readingStartedAt = System.currentTimeMillis()
+                                viewModel.openAssistant(null)
+                                navController.navigate(Routes.GENERATED_READING)
+                                viewModel.sendAssistantMessage("請依照以下主題與需求產生一篇自然的互動英文閱讀文章，附繁體中文逐句翻譯、重要單字資料與 5 題閱讀理解。主題與需求：$topic")
+                            },
                             onImport = { source ->
                                 selectedArticleId = null
                                 readingStartedAt = System.currentTimeMillis()
@@ -583,6 +587,7 @@ fun VocabApp(
                                 navController.navigate(Routes.GENERATED_READING)
                                 viewModel.sendAssistantMessage("請保留以下英文文章原文，只整理標題、段落、繁體中文逐句翻譯與 5 題閱讀理解；不要改寫原文。若內容是公開網址，請明確指出無法直接讀取時需要使用者貼上內文。\n\n$source")
                             },
+                            onRecognizeSources = viewModel::recognizeGrammarWritingSources,
                             onOpenArticle = { message -> selectedArticleId = message.id; navController.navigate(Routes.GENERATED_READING) }
                         )
                     }
@@ -649,7 +654,7 @@ fun VocabApp(
             WordLookupScreen(
                 decks = decks,
                 cards = allCards,
-                onBack = { navController.popBackStack() },
+                onBack = { selectedWritingRecordId = null; navController.popBackStack() },
                 onLookup = viewModel::lookupDictionary,
                 onAiComplete = viewModel::fetchAiWordDetails,
                 onOpenLocalCard = { card ->
@@ -698,6 +703,8 @@ fun VocabApp(
                 onReadingMistake = viewModel::recordReadingMistake,
                 onCopyReadingCard = viewModel::copyCardToDeck,
                 onCreateFolderAndCopyReadingCard = viewModel::createFolderAndCopyCard,
+                onLookupWord = viewModel::lookupDictionary,
+                onDeleteMessage = viewModel::deleteAssistantMessage,
                 onConfirmAction = viewModel::confirmAssistantAction,
                 onCancelAction = viewModel::cancelAssistantAction,
                 onUndoAction = viewModel::undoAssistantAction,
@@ -736,9 +743,30 @@ fun VocabApp(
                     onReadingMistake = viewModel::recordReadingMistake,
                     onCopyCardToDeck = viewModel::copyCardToDeck,
                     onCreateFolderAndCopyCard = viewModel::createFolderAndCopyCard,
+                    onLookupWord = viewModel::lookupDictionary,
+                    onDelete = {
+                        viewModel.deleteAssistantMessage(article.id)
+                        selectedArticleId = null
+                        navController.popBackStack()
+                    },
                     onBack = { selectedArticleId = null; navController.popBackStack() }
                 )
             }
+        }
+
+        composable(Routes.WRITING_RECORD_DETAIL) {
+            val record = grammarWritingRecords.firstOrNull { it.id == selectedWritingRecordId }
+            if (record == null) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            else WritingRecordDetailScreen(
+                record = record,
+                onBack = { selectedWritingRecordId = null; navController.popBackStack() },
+                onEdit = { navController.navigate(Routes.GRAMMAR_WRITING_CHECK) },
+                onDelete = {
+                    viewModel.deleteGrammarWritingRecord(record)
+                    selectedWritingRecordId = null
+                    navController.popBackStack()
+                }
+            )
         }
 
         composable(Routes.GRAMMAR_LIBRARY_MANAGE) {
@@ -1142,10 +1170,10 @@ fun VocabApp(
                 onRecognizeSources = viewModel::recognizeGrammarWritingSources,
                 onAccept = viewModel::acceptGrammarWritingIssue,
                 onSaveRecord = { title, course, original, revised, issues ->
-                    viewModel.saveGrammarWritingRecord(title, course, original, revised, issues)
+                    viewModel.saveGrammarWritingRecord(title, course, original, revised, issues, selectedWritingRecordId)
                 },
                 onDeleteRecord = viewModel::deleteGrammarWritingRecord,
-                onBack = { selectedWritingRecordId = null; navController.popBackStack() },
+                onBack = { navController.popBackStack() },
                 initialRecordId = selectedWritingRecordId
             )
         }

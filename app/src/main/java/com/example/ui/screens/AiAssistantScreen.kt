@@ -112,6 +112,7 @@ import com.example.data.assistant.AssistantPendingAction
 import com.example.viewmodel.AssistantSendOutcome
 import com.example.data.entity.Deck
 import com.example.data.entity.Flashcard
+import com.example.data.dictionary.DictionaryEntry
 import com.example.ui.components.rememberResponsiveLayout
 import org.json.JSONArray
 import org.json.JSONObject
@@ -152,6 +153,8 @@ fun AiAssistantScreen(
     onReadingMistake: (Long) -> Unit,
     onCopyReadingCard: (Flashcard, Long, (Boolean) -> Unit) -> Unit,
     onCreateFolderAndCopyReadingCard: (String, String, String, String, Flashcard, (Boolean) -> Unit) -> Unit,
+    onLookupWord: suspend (String) -> Result<DictionaryEntry>,
+    onDeleteMessage: (String) -> Unit,
     onConfirmAction: () -> Unit,
     onCancelAction: () -> Unit,
     onUndoAction: () -> Unit,
@@ -371,6 +374,8 @@ fun AiAssistantScreen(
             onReadingMistake = onReadingMistake,
             onCopyCardToDeck = onCopyReadingCard,
             onCreateFolderAndCopyCard = onCreateFolderAndCopyReadingCard,
+            onLookupWord = onLookupWord,
+            onDelete = { onDeleteMessage(activeArticleMessage.id); activeArticleMessageId = null },
             onBack = { activeArticleMessageId = null }
         )
         return

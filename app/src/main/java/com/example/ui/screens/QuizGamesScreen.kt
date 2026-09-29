@@ -1079,7 +1079,7 @@ private fun IndependentQuizView(
                         modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
                         shape = RoundedCornerShape(14.dp)
                     ) {
-                        Text(option, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start)
+                        Text(option, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start, style = MaterialTheme.typography.titleMedium)
                     }
                 }
             } else if (mode == QuizPlayMode.SENTENCE_ORDER) {

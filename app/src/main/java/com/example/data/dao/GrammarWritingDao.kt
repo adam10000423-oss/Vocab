@@ -5,6 +5,7 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Update
 import com.example.data.entity.GrammarWritingRecord
 import kotlinx.coroutines.flow.Flow
 
@@ -15,6 +16,9 @@ interface GrammarWritingDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(record: GrammarWritingRecord): Long
+
+    @Update
+    suspend fun update(record: GrammarWritingRecord)
 
     @Delete
     suspend fun delete(record: GrammarWritingRecord)

@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -22,11 +23,13 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -42,6 +45,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
@@ -54,6 +58,8 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.data.dictionary.DictionaryEntry
 import com.example.data.assistant.AssistantMessage
 import com.example.data.entity.Flashcard
 import com.example.data.entity.Deck
@@ -61,6 +67,7 @@ import com.example.ui.components.AddFolderDialog
 import com.example.ui.components.FlipCard
 import org.json.JSONObject
 import android.widget.Toast
+import kotlinx.coroutines.launch
 
 private data class ReadingTranslation(val sentence: String, val translation: String)
 private data class ReadingOption(val text: String, val correct: Boolean)
@@ -91,9 +98,12 @@ fun InteractiveReadingScreen(
     onReadingMistake: (Long) -> Unit,
     onCopyCardToDeck: (Flashcard, Long, (Boolean) -> Unit) -> Unit,
     onCreateFolderAndCopyCard: (String, String, String, String, Flashcard, (Boolean) -> Unit) -> Unit,
+    onLookupWord: suspend (String) -> Result<DictionaryEntry>,
+    onDelete: () -> Unit,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val content = remember(message.payload, message.content, cards) {
         parseReadingContent(message, cards)
     }
@@ -109,6 +119,26 @@ fun InteractiveReadingScreen(
     var cardToAdd by remember { mutableStateOf<Flashcard?>(null) }
     var showCreateFolder by remember { mutableStateOf(false) }
     var copyStatus by remember { mutableStateOf<String?>(null) }
+    var lookupWord by remember { mutableStateOf<String?>(null) }
+    var confirmDelete by remember { mutableStateOf(false) }
+
+    if (confirmDelete) AlertDialog(
+        onDismissRequest = { confirmDelete = false },
+        title = { Text("刪除文章？") },
+        text = { Text("這篇文章、翻譯與閱讀題目會一併刪除，且無法復原。") },
+        confirmButton = { Button(onClick = { confirmDelete = false; onDelete() }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("刪除") } },
+        dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("取消") } }
+    )
+
+    lookupWord?.let { word ->
+        Dialog(onDismissRequest = { lookupWord = null }) {
+            Card(shape = RoundedCornerShape(18.dp)) {
+                Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(Modifier.size(24.dp)); Spacer(Modifier.width(10.dp)); Text("正在查詢 $word…")
+                }
+            }
+        }
+    }
 
     cardToAdd?.let { card ->
         if (showCreateFolder) {
@@ -168,8 +198,11 @@ fun InteractiveReadingScreen(
             onDismissRequest = { onStopSpeaking(); selectedCard = null },
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
-            Box(Modifier.fillMaxSize().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
-                Box(Modifier.fillMaxWidth()) {
+            Box(
+                Modifier.fillMaxSize().clickable { onStopSpeaking(); selectedCard = null }.padding(horizontal = 20.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(Modifier.fillMaxWidth().clickable { }) {
                     FlipCard(
                         card = card,
                         isFlipped = showBack,
@@ -217,12 +250,8 @@ fun InteractiveReadingScreen(
                 },
                 actions = {
                     if (!quizMode) {
-                        IconButton(onClick = {
-                            val store = context.getSharedPreferences("saved_reading_articles", android.content.Context.MODE_PRIVATE)
-                            store.edit().putString(message.id, message.payload.ifBlank { message.content }).apply()
-                            Toast.makeText(context, "文章已儲存", Toast.LENGTH_SHORT).show()
-                        }) { Icon(Icons.Default.Save, "儲存文章") }
                         IconButton(onClick = { onSpeak(content.article) }) { Icon(Icons.AutoMirrored.Filled.VolumeUp, "朗讀文章") }
+                        IconButton(onClick = { confirmDelete = true }) { Icon(Icons.Default.Delete, "刪除文章", tint = MaterialTheme.colorScheme.error) }
                     }
                 }
             )
@@ -274,20 +303,43 @@ fun InteractiveReadingScreen(
                     ) {
                         ClickableText(
                             text = highlighted,
-                            style = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+                            style = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface, fontSize = 18.sp, lineHeight = 30.sp),
                             modifier = Modifier.fillMaxWidth().padding(18.dp),
                             onClick = { offset ->
                                 val word = highlighted.getStringAnnotations("WORD", offset, offset)
                                     .firstOrNull()?.item ?: return@ClickableText
                                 val existing = cards.firstOrNull { it.word.trim().equals(word, ignoreCase = true) }
                                 val sourceDeckIds = content.targetCards.map { it.deckId }.toSet()
-                                selectedCard = existing ?: Flashcard(
-                                    id = -word.lowercase().hashCode().toLong().let { kotlin.math.abs(it) },
-                                    deckId = 0,
-                                    word = word,
-                                    definition = "尚未加入單字庫；可先聽發音，再加入資料夾補齊資料。"
-                                )
-                                selectedOutsideSource = existing == null || existing.deckId !in sourceDeckIds
+                                if (existing != null) {
+                                    selectedCard = existing
+                                    selectedOutsideSource = existing.deckId !in sourceDeckIds
+                                } else {
+                                    lookupWord = word
+                                    scope.launch {
+                                        val entry = onLookupWord(word).getOrElse {
+                                            DictionaryEntry(
+                                                word = word,
+                                                phonetic = "",
+                                                partOfSpeech = "",
+                                                definition = "查不到完整資料，仍可加入資料夾後使用 AI 補齊。",
+                                                exampleSentence = "",
+                                                exampleTranslation = ""
+                                            )
+                                        }
+                                        selectedCard = Flashcard(
+                                            id = -word.lowercase().hashCode().toLong().let { kotlin.math.abs(it) },
+                                            deckId = 0,
+                                            word = entry.word.ifBlank { word },
+                                            phonetic = entry.phonetic,
+                                            partOfSpeech = entry.partOfSpeech,
+                                            definition = entry.definition,
+                                            exampleSentence = entry.exampleSentence,
+                                            exampleTranslation = entry.exampleTranslation
+                                        )
+                                        selectedOutsideSource = true
+                                        lookupWord = null
+                                    }
+                                }
                             }
                         )
                     }
@@ -362,7 +414,7 @@ private fun ReadingQuiz(
                 shape = RoundedCornerShape(14.dp),
                 color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
                 modifier = Modifier.fillMaxWidth()
-            ) { Text(question.options[index].text, modifier = Modifier.padding(16.dp), fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal) }
+            ) { Text(question.options[index].text, modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.titleMedium, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal) }
         }
         item {
             Button(onClick = onNext, enabled = selectedOption >= 0, modifier = Modifier.fillMaxWidth()) {

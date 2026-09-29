@@ -332,7 +332,7 @@ fun GrammarQuizFlowScreen(
                             selected = selected == choice,
                             enabled = !checked,
                             onClick = { selected = choice },
-                            label = { Text(choice, modifier = Modifier.padding(vertical = 5.dp)) },
+                            label = { Text(choice, modifier = Modifier.padding(vertical = 5.dp), style = MaterialTheme.typography.titleMedium) },
                             modifier = Modifier.fillMaxWidth()
                         )
                     }

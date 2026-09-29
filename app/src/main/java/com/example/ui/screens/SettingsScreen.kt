@@ -983,7 +983,7 @@ fun SettingsScreen(
                     SettingSwitch("僅使用 Wi-Fi 更新", settings.wifiOnlyUpdates) {
                         onBooleanChange("wifiOnlyUpdates", it)
                     }
-                    Text("目前版本 ${BuildConfig.VERSION_NAME}（${BuildConfig.VERSION_CODE}）")
+                    Text("目前版本 ${BuildConfig.VERSION_NAME}")
                     Text(updateStatus, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Button(
                         onClick = ::checkForUpdates,

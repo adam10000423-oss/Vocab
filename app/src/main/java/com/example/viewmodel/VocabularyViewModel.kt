@@ -901,15 +901,26 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
             runCatching {
                 db.withTransaction {
                     val existingNote = db.grammarNoteDao().getAllOnce().firstOrNull {
-                        it.title.equals(issue.title, ignoreCase = true)
+                        it.sourceType == "WRITING_CHECK" && it.title.equals(issue.title, ignoreCase = true)
                     }
                     val noteId = existingNote?.id ?: db.grammarNoteDao().insert(
                         GrammarNote(
-                            course = "寫作弱點", title = issue.title,
+                            course = "寫作弱點", folder = "寫作弱點", title = issue.title,
                             summary = issue.explanation, commonMistakes = "${issue.originalText} → ${issue.correctedText}",
                             sourceType = "WRITING_CHECK"
                         )
                     )
+                    if (db.grammarLibraryDao().getAllOnce().none {
+                            it.course == "寫作弱點" && it.name == "寫作弱點"
+                        }) {
+                        db.grammarLibraryDao().insert(
+                            GrammarLibrary(
+                                course = "寫作弱點",
+                                name = "寫作弱點",
+                                description = "由作文批改自動整理的文法弱點"
+                            )
+                        )
+                    }
                     val oldWeakness = db.grammarQuestionDao().getWeakness(issue.ruleKey)
                     if (oldWeakness == null) db.grammarQuestionDao().insertWeakness(
                         GrammarWeakness(
@@ -949,6 +960,7 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
         originalText: String,
         revisedText: String,
         issues: List<GrammarWritingIssue>,
+        recordId: Long? = null,
         onComplete: (Long) -> Unit = {}
     ) {
         if (title.isBlank() || originalText.isBlank()) return
@@ -961,15 +973,21 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
                     put("explanation", issue.explanation)
                 }) }
             }.toString()
-            val id = db.grammarWritingDao().insert(
-                GrammarWritingRecord(
+            val existing = recordId?.let { target -> grammarWritingRecords.value.firstOrNull { it.id == target } }
+            val record = GrammarWritingRecord(
+                    id = existing?.id ?: 0,
                     course = course.ifBlank { "通用" },
                     title = title.trim(),
                     originalText = originalText,
                     revisedText = revisedText.ifBlank { originalText },
-                    issuesJson = payload
+                    issuesJson = payload,
+                    createdAt = existing?.createdAt ?: System.currentTimeMillis(),
+                    updatedAt = System.currentTimeMillis()
                 )
-            )
+            val id = if (existing == null) db.grammarWritingDao().insert(record) else {
+                db.grammarWritingDao().update(record)
+                record.id
+            }
             onComplete(id)
         }
     }
@@ -2180,6 +2198,14 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
             if (next == null) newAssistantConversation(false)
             else selectAssistantConversation(next.id)
         }
+        persistAssistantState()
+    }
+
+    fun deleteAssistantMessage(messageId: String) {
+        val message = assistantAllMessages.firstOrNull { it.id == messageId } ?: return
+        message.attachmentUris.forEach(::deletePersistedAssistantAttachment)
+        assistantAllMessages.removeAll { it.id == messageId }
+        if (_assistantCurrentConversationId.value == message.conversationId) refreshAssistantMessages()
         persistAssistantState()
     }
 
