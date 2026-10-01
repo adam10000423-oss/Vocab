@@ -109,6 +109,7 @@ fun StudyHubScreen(
                 .padding(innerPadding)
                 .padding(top = if (showTopBar) 6.dp else 0.dp)
                 .padding(horizontal = 16.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 12.dp, bottom = 120.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             if (decks.isEmpty()) {
@@ -194,7 +195,7 @@ fun StudyHubScreen(
                     Card(
                         shape = RoundedCornerShape(20.dp),
                         colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                            containerColor = MaterialTheme.colorScheme.surface
                         ),
                         modifier = Modifier.fillMaxWidth()
                     ) {

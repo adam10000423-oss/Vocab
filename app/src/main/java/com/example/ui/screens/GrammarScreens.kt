@@ -88,22 +88,22 @@ fun GrammarDashboardScreen(
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
+        contentPadding = PaddingValues(start = 16.dp, top = 12.dp, end = 16.dp, bottom = 120.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // Hero Progress Card
         item {
             Card(
                 shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text("今日文法複習", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                            Text("待複習 ${due.size} 個文法", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                            Text("今日文法複習", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                            Text("待複習 ${due.size} 個文法", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                         }
-                        Text("共 ${notes.size} 篇筆記", color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f))
+                        Text("共 ${notes.size} 篇筆記", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f))
                     }
                 }
             }
@@ -150,7 +150,7 @@ fun GrammarDashboardScreen(
 
         if (recentNotes.isEmpty()) {
             item {
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))) {
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                     Column(
                         Modifier.fillMaxWidth().padding(24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -292,7 +292,7 @@ fun GrammarNotesScreen(
                 Card(
                     onClick = { selectedType = folder },
                     shape = RoundedCornerShape(22.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .55f))
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                 ) {
                     Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -315,7 +315,7 @@ fun GrammarNotesScreen(
             }
         } else if (displayedNotes.isEmpty()) {
             item {
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))) {
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                     Column(
                         Modifier.fillMaxWidth().padding(24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -383,7 +383,7 @@ fun GrammarStudyHubScreen(
         item {
             Card(
                 shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -409,7 +409,7 @@ fun GrammarStudyHubScreen(
 
         if (filtered.isEmpty()) {
             item {
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))) {
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                     Column(
                         Modifier.fillMaxWidth().padding(24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -425,7 +425,7 @@ fun GrammarStudyHubScreen(
                 Card(
                     onClick = { onOpen(note) },
                     shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                 ) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         GrammarNoteCardBody(note = note, now = now)
@@ -452,7 +452,7 @@ private fun GrammarNoteCard(
     showReorder: Boolean = false,
     dragHandleModifier: Modifier = Modifier
 ) {
-    Card(onClick = { onOpen(note) }, shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))) {
+    Card(onClick = { onOpen(note) }, shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) { GrammarNoteCardBody(note = note, now = now) }
@@ -676,7 +676,7 @@ private fun GrammarQuestionEditor(
     var expanded by rememberSaveable(index) { mutableStateOf(index == 0) }
     Card(
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -727,7 +727,7 @@ private fun GrammarPatternEditor(
     onDelete: () -> Unit
 ) {
     var expanded by rememberSaveable(index) { mutableStateOf(index == 0) }
-    Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))) {
+    Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -812,7 +812,7 @@ fun GrammarLearnScreen(
         Column(Modifier.padding(padding).padding(horizontal = 16.dp, vertical = 8.dp).fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             LinearProgressIndicator(progress = { (step + 1f) / pages.size.coerceAtLeast(1) }, modifier = Modifier.fillMaxWidth())
             Text(page.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)), modifier = Modifier.fillMaxWidth()) {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(page.primary, style = if (page.title.startsWith("句型")) MaterialTheme.typography.titleLarge else MaterialTheme.typography.bodyLarge)
                     if (page.secondary.isNotBlank()) { HorizontalDivider(); Text(page.secondary, color = MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -1052,7 +1052,7 @@ fun GrammarWritingCheckScreen(
             }
             items(issues.filter { "${it.ruleKey}|${it.originalSentence}" !in ignored }, key = { "${it.ruleKey}|${it.originalSentence}" }) { issue ->
                 val key = "${issue.ruleKey}|${issue.originalSentence}"
-                Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))) {
+                Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         AssistChip(onClick = {}, label = { Text(issue.title) })
                         Text("原文", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -1123,7 +1123,7 @@ fun GrammarQuizHubScreen(
         }
         item { Text("選擇文法類型", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
         if (selectedQuestions.isEmpty()) item {
-            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))) {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                 Column(Modifier.fillMaxWidth().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("目前範圍還沒有測驗題", fontWeight = FontWeight.Bold)
                     TextButton(onClick = { onGenerateAiTopicQuiz(selectedFolder ?: selectedCourse ?: "綜合文法") }) { Icon(Icons.Default.AutoAwesome, null); Spacer(Modifier.width(4.dp)); Text("AI 建立題目") }
@@ -1132,7 +1132,7 @@ fun GrammarQuizHubScreen(
         }
         items(selectedNotes.filter { note -> selectedQuestions.any { it.grammarNoteId == note.id } }, key = { it.id }) { note ->
             val noteQuestions = selectedQuestions.filter { it.grammarNoteId == note.id }
-            Card(onClick = { onStartTopicQuiz(note.title, noteQuestions) }, shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))) {
+            Card(onClick = { onStartTopicQuiz(note.title, noteQuestions) }, shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                 Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.MenuBook, null, tint = MaterialTheme.colorScheme.primary)
                     Spacer(Modifier.width(12.dp))
@@ -1142,7 +1142,7 @@ fun GrammarQuizHubScreen(
             }
         }
         item {
-            Card(onClick = onOpenWritingCheck, shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))) {
+            Card(onClick = onOpenWritingCheck, shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                 Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Spellcheck, null, tint = MaterialTheme.colorScheme.primary); Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) { Text("寫作檢查", fontWeight = FontWeight.Bold); Text("輸入、拍照或掃描作文", color = MaterialTheme.colorScheme.onSurfaceVariant) }

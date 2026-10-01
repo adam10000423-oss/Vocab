@@ -68,11 +68,7 @@ fun OnboardingGoalScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    listOf(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.background)
-                )
-            )
+            .background(MaterialTheme.colorScheme.background)
             .padding(responsive.horizontalPadding),
         contentAlignment = Alignment.Center
     ) {

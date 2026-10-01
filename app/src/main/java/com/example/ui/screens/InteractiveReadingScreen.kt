@@ -298,7 +298,7 @@ fun InteractiveReadingScreen(
                         MaterialTheme.colorScheme.primary
                     )
                     Card(
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                         shape = RoundedCornerShape(18.dp)
                     ) {
                         ClickableText(

@@ -614,6 +614,7 @@ fun VocabApp(
             }
             val cardsToReview = reviewPool.distinctBy { it.id }
             FlashcardReviewScreen(
+                themeMode = settings.themeMode,
                 cards = cardsToReview,
                 sessionScopeId = reviewScopeId,
                 advancedSrs = settings.advancedSrs,
@@ -928,12 +929,6 @@ fun VocabApp(
                 onIntChange = viewModel::updateIntSetting,
                 onReminderTimesChange = viewModel::updateReminderTimes,
                 onThemeChange = viewModel::updateThemeMode,
-                onThemeColorPresetChange = viewModel::updateThemeColorPreset,
-                onCustomThemeColorsChange = viewModel::updateCustomThemeColors,
-                onGradientColorsChange = viewModel::updateGradientColors,
-                onCustomTextColorChange = viewModel::updateCustomTextColor,
-                onBackgroundAppearanceChange = viewModel::updateBackgroundAppearance,
-                onFontAppearanceChange = viewModel::updateFontAppearance,
                 onSpeechRateChange = viewModel::updateSpeechRate,
                 onDictionarySourceChange = viewModel::updateDictionarySource,
                 ttsVoices = ttsVoices,

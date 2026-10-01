@@ -242,7 +242,7 @@ fun FoldersManagementScreen(
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
                 shape = CircleShape,
-                modifier = Modifier.testTag("add_folder_fab")
+                modifier = Modifier.padding(bottom = 98.dp).testTag("add_folder_fab")
             ) {
                 Icon(imageVector = Icons.Default.Add, contentDescription = "新增資料夾")
             }
@@ -256,6 +256,7 @@ fun FoldersManagementScreen(
                 .padding(innerPadding)
                 .padding(top = if (showTopBar) 6.dp else 0.dp)
                 .padding(horizontal = 16.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 12.dp, bottom = 120.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             item {
@@ -360,7 +361,7 @@ fun FoldersManagementScreen(
                         Card(
                             shape = RoundedCornerShape(20.dp),
                             colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                containerColor = MaterialTheme.colorScheme.surface
                             ),
                             modifier = Modifier.fillMaxWidth()
                         ) {

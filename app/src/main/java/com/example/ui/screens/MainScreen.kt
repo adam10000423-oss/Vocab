@@ -51,6 +51,21 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.BlurEffect
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.foundation.Canvas
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -85,6 +100,9 @@ fun MainScreen(
     modifier: Modifier = Modifier
 ) {
     val responsive = rememberResponsiveLayout()
+    val pageLayer = rememberGraphicsLayer()
+    var pagePosition by remember { mutableStateOf(Offset.Zero) }
+    var barPosition by remember { mutableStateOf(Offset.Zero) }
     val showNavigationLabels = !responsive.isLandscape &&
         !responsive.isSmallWidth &&
         !responsive.isLargeText
@@ -138,47 +156,33 @@ fun MainScreen(
                             targetState = pagerState.currentPage to grammarMode,
                             label = "main_page_title"
                         ) { (page, grammar) ->
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                androidx.compose.material3.Surface(
-                                    onClick = onToggleGrammarMode,
+                            if (page == 0) {
+                                Surface(
                                     shape = CircleShape,
-                                    color = MaterialTheme.colorScheme.primaryContainer,
-                                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                    color = MaterialTheme.colorScheme.surfaceVariant
                                 ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                                    ) {
-                                        Icon(
-                                            Icons.Default.SwapHoriz,
-                                            contentDescription = "切換單字與文法",
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(Modifier.width(4.dp))
-                                        Text(if (grammar) "文法" else "單字", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                                    Row(Modifier.padding(3.dp)) {
+                                        listOf(false to "單字", true to "文法").forEach { (mode, label) ->
+                                            Surface(
+                                                onClick = { if (grammar != mode) onToggleGrammarMode() },
+                                                shape = CircleShape,
+                                                color = if (grammar == mode) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                                                contentColor = if (grammar == mode) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                                            ) {
+                                                Text(
+                                                    label,
+                                                    style = MaterialTheme.typography.labelLarge,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp)
+                                                )
+                                            }
+                                        }
                                     }
                                 }
+                            } else {
                                 Text(
-                                    text = if (grammar) {
-                                        when (page) {
-                                            0 -> "文法總覽"
-                                            1 -> "文法庫"
-                                            2 -> "學習"
-                                            3 -> "測驗"
-                                            else -> "作文"
-                                        }
-                                    } else {
-                                        when (page) {
-                                            0 -> "Vocab"
-                                            1 -> "資料夾"
-                                            2 -> "學習"
-                                            3 -> "測驗"
-                                            else -> "文章"
-                                        }
-                                    },
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(start = 8.dp)
+                                    tabs[page].label,
+                                    style = MaterialTheme.typography.titleLarge
                                 )
                             }
                         }
@@ -213,26 +217,68 @@ fun MainScreen(
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface
+                        containerColor = MaterialTheme.colorScheme.background
                     )
                 )
             }
         },
-        bottomBar = {
+        modifier = modifier
+    ) { innerPadding ->
+        Box(Modifier.fillMaxSize().padding(innerPadding)) {
+        HorizontalPager(
+            state = pagerState,
+            userScrollEnabled = showBottomNavigation,
+            modifier = Modifier
+                .fillMaxSize()
+                .onGloballyPositioned { pagePosition = it.positionInRoot() }
+                .drawWithContent {
+                    pageLayer.record { this@drawWithContent.drawContent() }
+                    drawLayer(pageLayer)
+                }
+        ) { page ->
+            when (page) {
+                0 -> dashboardContent()
+                1 -> foldersContent()
+                2 -> studyContent()
+                3 -> quizContent()
+                4 -> libraryToolContent()
+            }
+        }
+
             if (showBottomNavigation) Box(
                 modifier = Modifier
+                    .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .navigationBarsPadding()
                     .padding(horizontal = 14.dp, vertical = 8.dp),
                 contentAlignment = Alignment.Center
             ) {
+                Box(
+                    Modifier.fillMaxWidth()
+                        .shadow(20.dp, RoundedCornerShape(34.dp))
+                        .clip(RoundedCornerShape(34.dp))
+                        .onGloballyPositioned { barPosition = it.positionInRoot() }
+                ) {
+                Canvas(
+                    Modifier.matchParentSize().graphicsLayer {
+                        renderEffect = BlurEffect(24f, 24f)
+                    }
+                ) {
+                    val delta = pagePosition - barPosition
+                    with(drawContext.canvas) {
+                        save()
+                        translate(delta.x, delta.y)
+                        drawLayer(pageLayer)
+                        restore()
+                    }
+                }
                 Surface(
                     shape = RoundedCornerShape(34.dp),
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.82f),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
                     contentColor = MaterialTheme.colorScheme.onSurface,
-                    tonalElevation = 8.dp,
-                    shadowElevation = 14.dp,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)),
+                    tonalElevation = 0.dp,
+                    shadowElevation = 0.dp,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.16f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
@@ -240,15 +286,15 @@ fun MainScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         tabs.forEachIndexed { index, tab ->
-                            val selected = currentTab == index
+                            val selected = pagerState.currentPage == index
                             Surface(
                                 onClick = { onTabSelected(index) },
                                 shape = RoundedCornerShape(28.dp),
                                 color = if (selected) {
-                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.88f)
+                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
                                 } else Color.Transparent,
                                 contentColor = if (selected) {
-                                    MaterialTheme.colorScheme.primary
+                                    MaterialTheme.colorScheme.onSurface
                                 } else MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier
                                     .weight(1f)
@@ -278,25 +324,9 @@ fun MainScreen(
                         }
                     }
                 }
-            }
-        },
-        modifier = modifier
-    ) { innerPadding ->
-        HorizontalPager(
-            state = pagerState,
-            userScrollEnabled = showBottomNavigation,
-            modifier = Modifier
-                .padding(innerPadding)
-                .padding(top = 6.dp)
-                .fillMaxSize()
-        ) { page ->
-            when (page) {
-                0 -> dashboardContent()
-                1 -> foldersContent()
-                2 -> studyContent()
-                3 -> quizContent()
-                4 -> libraryToolContent()
+                }
             }
         }
+
     }
 }

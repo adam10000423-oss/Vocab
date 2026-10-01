@@ -49,7 +49,7 @@ fun StatisticsChart(
             .testTag("statistics_chart_card"),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+            containerColor = MaterialTheme.colorScheme.surface
         )
     ) {
         Column(

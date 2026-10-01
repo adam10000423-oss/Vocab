@@ -14,6 +14,9 @@ import android.os.IBinder
 import android.provider.Settings
 import android.view.Gravity
 import android.view.View
+import android.view.MotionEvent
+import android.view.ViewConfiguration
+import android.content.res.Configuration
 import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -29,6 +32,9 @@ class AutoPlayOverlayService : Service() {
     private var currentWord = ""
     private var currentDefinition = ""
     private var showingBack = false
+    private var themeMode = "SYSTEM"
+    private var overlayX: Int? = null
+    private var overlayY: Int? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -50,6 +56,7 @@ class AutoPlayOverlayService : Service() {
                 currentDefinition = intent?.getStringExtra(EXTRA_DEFINITION).orEmpty()
                 showingBack = intent?.getBooleanExtra(EXTRA_IS_BACK, false) ?: false
                 showOverlay = intent?.getBooleanExtra(EXTRA_SHOW_OVERLAY, false) ?: false
+                themeMode = intent?.getStringExtra(EXTRA_THEME_MODE) ?: "SYSTEM"
                 startForeground(NOTIFICATION_ID, buildNotification())
                 refreshOverlay()
             }
@@ -58,6 +65,11 @@ class AutoPlayOverlayService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        refreshOverlay()
+    }
 
     override fun onDestroy() {
         removeOverlay()
@@ -110,14 +122,19 @@ class AutoPlayOverlayService : Service() {
         removeOverlay()
 
         val density = resources.displayMetrics.density
+        val dark = when (themeMode) {
+            "DARK" -> true
+            "LIGHT" -> false
+            else -> resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
+        }
         val container = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding((16 * density).toInt(), (11 * density).toInt(), (16 * density).toInt(), (12 * density).toInt())
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 cornerRadius = 24 * density
-                setColor(Color.argb(232, 30, 43, 56))
-                setStroke((1 * density).toInt().coerceAtLeast(1), Color.argb(90, 255, 255, 255))
+                setColor(if (dark) Color.rgb(25, 25, 25) else Color.WHITE)
+                setStroke((1 * density).toInt().coerceAtLeast(1), if (dark) Color.rgb(70, 70, 70) else Color.rgb(220, 220, 220))
             }
             elevation = 12 * density
             contentDescription = "Vocab 自動播放浮動視窗"
@@ -129,13 +146,8 @@ class AutoPlayOverlayService : Service() {
             }
         }
         container.addView(TextView(this).apply {
-            text = if (showingBack) "背面 · 中文" else "正面 · 英文"
-            setTextColor(Color.rgb(151, 205, 244))
-            textSize = 12f
-        })
-        container.addView(TextView(this).apply {
             text = displayText()
-            setTextColor(Color.WHITE)
+            setTextColor(if (dark) Color.WHITE else Color.BLACK)
             textSize = if (showingBack) 17f else 21f
             maxLines = 3
             setPadding(0, (4 * density).toInt(), 0, 0)
@@ -152,9 +164,48 @@ class AutoPlayOverlayService : Service() {
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
         ).apply {
-            gravity = Gravity.TOP or Gravity.END
-            x = (12 * density).toInt()
-            y = (72 * density).toInt()
+            gravity = Gravity.TOP or Gravity.LEFT
+            x = overlayX ?: (resources.displayMetrics.widthPixels - width - 12 * density).toInt().coerceAtLeast(0)
+            y = overlayY ?: (72 * density).toInt()
+            x = x.coerceIn(0, (resources.displayMetrics.widthPixels - width).coerceAtLeast(0))
+            y = y.coerceIn(0, (resources.displayMetrics.heightPixels - 120 * density).toInt().coerceAtLeast(0))
+        }
+        var downX = 0f
+        var downY = 0f
+        var startX = 0
+        var startY = 0
+        var dragging = false
+        val touchSlop = ViewConfiguration.get(this).scaledTouchSlop
+        container.setOnTouchListener { view, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    downX = event.rawX
+                    downY = event.rawY
+                    startX = params.x
+                    startY = params.y
+                    dragging = false
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = event.rawX - downX
+                    val dy = event.rawY - downY
+                    if (kotlin.math.abs(dx) > touchSlop || kotlin.math.abs(dy) > touchSlop) dragging = true
+                    if (dragging) {
+                        params.x = (startX + dx).toInt().coerceIn(0, (resources.displayMetrics.widthPixels - params.width).coerceAtLeast(0))
+                        params.y = (startY + dy).toInt().coerceIn(0, (resources.displayMetrics.heightPixels - view.height).coerceAtLeast(0))
+                        overlayX = params.x
+                        overlayY = params.y
+                        runCatching { windowManager.updateViewLayout(view, params) }
+                    }
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    if (!dragging) view.performClick()
+                    true
+                }
+                MotionEvent.ACTION_CANCEL -> true
+                else -> false
+            }
         }
         runCatching {
             windowManager.addView(container, params)
@@ -177,6 +228,7 @@ class AutoPlayOverlayService : Service() {
         private const val EXTRA_DEFINITION = "definition"
         private const val EXTRA_IS_BACK = "is_back"
         private const val EXTRA_SHOW_OVERLAY = "show_overlay"
+        private const val EXTRA_THEME_MODE = "theme_mode"
 
         @Volatile private var activeInstance: AutoPlayOverlayService? = null
         @Volatile private var appVisible: Boolean = true
@@ -186,7 +238,8 @@ class AutoPlayOverlayService : Service() {
             word: String,
             definition: String,
             isBack: Boolean,
-            showOverlay: Boolean
+            showOverlay: Boolean,
+            themeMode: String = "SYSTEM"
         ) {
             val intent = Intent(context, AutoPlayOverlayService::class.java)
                 .setAction(ACTION_UPDATE)
@@ -194,6 +247,7 @@ class AutoPlayOverlayService : Service() {
                 .putExtra(EXTRA_DEFINITION, definition)
                 .putExtra(EXTRA_IS_BACK, isBack)
                 .putExtra(EXTRA_SHOW_OVERLAY, showOverlay)
+                .putExtra(EXTRA_THEME_MODE, themeMode)
             ContextCompat.startForegroundService(context, intent)
         }
 

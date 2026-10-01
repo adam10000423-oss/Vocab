@@ -136,7 +136,8 @@ fun GrammarLibrariesScreen(
                     onClick = { showAdd = true },
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary,
-                    shape = CircleShape
+                    shape = CircleShape,
+                    modifier = Modifier.padding(bottom = 98.dp)
                 ) { Icon(Icons.Default.Add, "新增文法庫") }
             }
         }
@@ -144,7 +145,7 @@ fun GrammarLibrariesScreen(
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp),
-            contentPadding = PaddingValues(bottom = 96.dp),
+            contentPadding = PaddingValues(top = 12.dp, bottom = 120.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             item {
@@ -282,7 +283,7 @@ private fun GrammarLearningLibraryCard(
     val progress = if (total > 0) mastered.toFloat() / total else 0f
     Card(
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .5f)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -340,7 +341,7 @@ private fun GrammarQuizLibraryCard(
 ) {
     Card(
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .5f)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

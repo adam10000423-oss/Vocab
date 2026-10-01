@@ -363,7 +363,7 @@ fun ExternalImportScreen(
                         searchResults.forEach { result ->
                             Card(
                                 colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+                                    containerColor = MaterialTheme.colorScheme.surface
                                 ),
                                 shape = RoundedCornerShape(14.dp),
                                 modifier = Modifier.fillMaxWidth()
@@ -571,7 +571,7 @@ fun ExternalImportScreen(
                     Card(
                         shape = RoundedCornerShape(14.dp),
                         colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+                            containerColor = MaterialTheme.colorScheme.surface
                         )
                     ) {
                         Row(
@@ -705,7 +705,7 @@ private fun ImportPanel(
     Card(
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            containerColor = MaterialTheme.colorScheme.surface
         ),
         modifier = Modifier.fillMaxWidth()
     ) {

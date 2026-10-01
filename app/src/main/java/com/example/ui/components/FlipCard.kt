@@ -39,6 +39,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -70,6 +71,9 @@ fun FlipCard(
     modifier: Modifier = Modifier
 ) {
     val responsive = rememberResponsiveLayout()
+    val latestSwipeLeft by rememberUpdatedState(onSwipeLeft)
+    val latestSwipeRight by rememberUpdatedState(onSwipeRight)
+    val swipeThreshold = with(androidx.compose.ui.platform.LocalDensity.current) { 72.dp.toPx() }
     val contentPadding = if (responsive.isConstrained) 16.dp else 24.dp
     var offsetX by remember(card.id) { mutableFloatStateOf(0f) }
     val animatedOffsetX by animateFloatAsState(
@@ -88,10 +92,10 @@ fun FlipCard(
         Modifier.pointerInput(card.id) {
                 detectHorizontalDragGestures(
                     onDragEnd = {
-                        if (offsetX > 150f) {
-                            onSwipeRight?.invoke()
-                        } else if (offsetX < -150f) {
-                            onSwipeLeft?.invoke()
+                        if (offsetX > swipeThreshold) {
+                            latestSwipeRight?.invoke()
+                        } else if (offsetX < -swipeThreshold) {
+                            latestSwipeLeft?.invoke()
                         }
                         offsetX = 0f
                     },
@@ -122,9 +126,9 @@ fun FlipCard(
                 .clickable { onFlip() },
             shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                containerColor = MaterialTheme.colorScheme.surface
             ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
         ) {
             if (flipRotation <= 90f) {
                 // FRONT SIDE OF CARD (English Word & Audio)
@@ -159,7 +163,7 @@ fun FlipCard(
                                 Icon(
                                     imageVector = if (card.isFavorite) Icons.Filled.Star else Icons.Outlined.StarBorder,
                                     contentDescription = if (card.isFavorite) "取消收藏" else "加入收藏",
-                                    tint = if (card.isFavorite) Color(0xFFFFB800) else MaterialTheme.colorScheme.onSurfaceVariant
+                                    tint = if (card.isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
@@ -225,7 +229,7 @@ fun FlipCard(
                     // Hint at bottom
                     if (showSwipeHint) {
                         Text(
-                            text = "左滑：不熟  ·  右滑：記得",
+                            text = "左滑：不熟  ·  右滑：記住",
                             style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.align(Alignment.BottomCenter)
@@ -347,7 +351,7 @@ fun FlipCard(
                     .padding(16.dp)
             ) {
                 Text(
-                    text = "記得",
+                    text = "記住",
                     color = MaterialTheme.colorScheme.onPrimary,
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)

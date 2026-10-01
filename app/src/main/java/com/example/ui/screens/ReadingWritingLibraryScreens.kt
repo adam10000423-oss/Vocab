@@ -160,7 +160,7 @@ fun ReadingLibraryScreen(
     )
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 96.dp),
+        contentPadding = PaddingValues(16.dp, 12.dp, 16.dp, 120.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
@@ -179,7 +179,7 @@ fun ReadingLibraryScreen(
             Card(
                 onClick = { onOpenArticle(message) },
                 shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .55f))
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                     if (index == 0) Text("最近閱讀", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
@@ -201,7 +201,7 @@ fun WritingLibraryScreen(
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 96.dp),
+        contentPadding = PaddingValues(16.dp, 12.dp, 16.dp, 120.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
@@ -220,7 +220,7 @@ fun WritingLibraryScreen(
             Card(
                 onClick = { onOpen(record) },
                 shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .55f))
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     if (index == 0) Text("最近修改", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
@@ -295,7 +295,7 @@ fun WritingRecordDetailScreen(
                 0 -> {
                     item { Text("批改摘要", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
                     item {
-                        Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .5f))) {
+                        Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text("共發現 ${issues.size} 項可改進內容。", style = MaterialTheme.typography.titleMedium)
                                 issues.groupingBy { it.title.ifBlank { "其他" } }.eachCount().forEach { (title, count) -> Text("$title · $count 項") }
@@ -307,7 +307,7 @@ fun WritingRecordDetailScreen(
                 2 -> item { WritingTextCard("修改後作文", record.revisedText) }
                 else -> if (issues.isEmpty()) item { CalmEmptyState(Icons.Default.CheckCircle, "沒有批改項目", "這篇作文沒有保存逐項修改資料。") }
                 else items(issues) { issue ->
-                    Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .5f))) {
+                    Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                             AssistChip(onClick = {}, label = { Text(issue.title.ifBlank { "修改建議" }) })
                             Text("原文", style = MaterialTheme.typography.labelMedium); Text(issue.originalSentence.ifBlank { issue.originalText }, color = MaterialTheme.colorScheme.error)
@@ -323,7 +323,7 @@ fun WritingRecordDetailScreen(
 
 @Composable
 private fun WritingTextCard(title: String, text: String) {
-    Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .5f))) {
+    Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Text(text, style = MaterialTheme.typography.bodyLarge)

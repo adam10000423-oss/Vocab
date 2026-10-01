@@ -139,7 +139,7 @@ fun DashboardScreen(
                                 if (actionType == "REVIEW") onStartReview() else onOpenQuizGames(null)
                             },
                             shape = RoundedCornerShape(14.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Row(
@@ -295,6 +295,7 @@ fun DashboardScreen(
                 .padding(innerPadding)
                 .padding(top = if (showTopBar) 6.dp else 0.dp)
                 .padding(horizontal = 16.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 12.dp, bottom = 120.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // Keep today's status, goal and streak in one calm summary card.

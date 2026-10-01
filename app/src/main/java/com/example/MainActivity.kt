@@ -14,8 +14,8 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.background
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -25,9 +25,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ui.navigation.VocabApp
 import com.example.ui.theme.MyApplicationTheme
-import com.example.ui.theme.presetForcesDark
-import com.example.ui.theme.themeGradientColors
-import com.example.ui.theme.customGradientColors
 import com.example.viewmodel.VocabularyViewModel
 import com.example.util.AutoPlayOverlayService
 
@@ -43,60 +40,26 @@ class MainActivity : ComponentActivity() {
         setContent {
             val appViewModel: VocabularyViewModel = viewModel()
             val settings = appViewModel.settings.collectAsStateWithLifecycle().value
-            val darkTheme = presetForcesDark(settings.themeColorPreset) ?: isSystemInDarkTheme()
+            val systemDarkTheme = isSystemInDarkTheme()
+            val darkTheme = when (settings.themeMode) {
+                "LIGHT" -> false
+                "DARK" -> true
+                else -> systemDarkTheme
+            }
             SideEffect {
                 WindowCompat.getInsetsController(window, window.decorView).apply {
                     isAppearanceLightStatusBars = !darkTheme
                     isAppearanceLightNavigationBars = !darkTheme
                 }
             }
-            val gradientColors = if (settings.gradientEnabled) {
-                customGradientColors(
-                    start = settings.gradientStartColor,
-                    end = settings.gradientEndColor,
-                    darkTheme = darkTheme,
-                    brightness = settings.backgroundBrightness
-                )
-            } else {
-                themeGradientColors(
-                    preset = settings.themeColorPreset,
-                    customPrimary = settings.customPrimaryColor,
-                    customSecondary = settings.customSecondaryColor,
-                    darkTheme = darkTheme,
-                    brightness = settings.backgroundBrightness
-                )
-            }
-            MyApplicationTheme(
-                darkTheme = darkTheme,
-                colorPreset = settings.themeColorPreset,
-                customPrimary = settings.customPrimaryColor,
-                customSecondary = settings.customSecondaryColor,
-                backgroundBrightness = settings.backgroundBrightness,
-                backgroundOpacity = settings.backgroundOpacity,
-                gradientEnabled = settings.gradientEnabled,
-                gradientStartColor = settings.gradientStartColor,
-                gradientEndColor = settings.gradientEndColor,
-                fontFamilyName = settings.fontFamily,
-                englishFontFamilyName = settings.englishFontFamily,
-                fontScale = settings.fontScale,
-                customTextColorEnabled = settings.customTextColorEnabled,
-                customTextColor = settings.customTextColor
-            ) {
+            MyApplicationTheme(darkTheme = darkTheme) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         // In landscape, gesture/navigation controls can live on either
                         // side of the display. Protect every screen at the app root.
                         .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
-                        .background(
-                            if (settings.gradientEnabled) {
-                                Brush.linearGradient(gradientColors)
-                            } else {
-                                Brush.linearGradient(
-                                    listOf(gradientColors.first(), gradientColors.first())
-                                )
-                            }
-                        )
+                        .background(MaterialTheme.colorScheme.background)
                 ) {
                     VocabApp(
                         viewModel = appViewModel,

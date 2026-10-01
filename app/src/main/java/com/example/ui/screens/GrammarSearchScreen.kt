@@ -35,7 +35,7 @@ fun GrammarSearchScreen(notes: List<GrammarNote>, onOpen: (GrammarNote) -> Unit,
             if (query.isNotBlank() && results.isEmpty()) Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { Text("找不到符合的文法筆記") }
             LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(results, key = { it.id }) { note ->
-                    Card(onClick = { onOpen(note) }, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .55f))) {
+                    Card(onClick = { onOpen(note) }, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(note.title, fontWeight = FontWeight.Bold)
                             Text("${note.course} · ${note.folder}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)

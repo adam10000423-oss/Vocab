@@ -505,7 +505,7 @@ fun AddEditCardScreen(
                 Spacer(modifier = Modifier.height(4.dp))
                 Card(
                     shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
@@ -635,7 +635,7 @@ private fun CompactCardEditItem(
 
     Card(
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         modifier = Modifier
             .fillMaxWidth()
             .testTag("compact_card_edit_item_$index")

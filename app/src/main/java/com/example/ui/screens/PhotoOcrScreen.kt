@@ -561,7 +561,7 @@ fun PhotoOcrScreen(
                         itemsIndexed(localCandidates) { index, candidate ->
                         Card(
                             shape = RoundedCornerShape(14.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Row(

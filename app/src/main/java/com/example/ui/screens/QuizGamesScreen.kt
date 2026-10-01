@@ -218,7 +218,7 @@ fun QuizGamesScreen(
                             enabled = eligibleCount > 0,
                             shape = RoundedCornerShape(14.dp),
                             colors = ButtonDefaults.outlinedButtonColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                                containerColor = MaterialTheme.colorScheme.surface,
                                 contentColor = MaterialTheme.colorScheme.onSurface
                             ),
                             modifier = Modifier.fillMaxWidth()
@@ -347,6 +347,7 @@ fun QuizGamesScreen(
                 .padding(innerPadding)
                 .padding(top = if (showHubTopBar) 6.dp else 0.dp)
                 .padding(horizontal = 16.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 12.dp, bottom = 120.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             if (decks.isEmpty()) {
@@ -434,7 +435,7 @@ fun QuizGamesScreen(
                     Card(
                         shape = RoundedCornerShape(20.dp),
                         colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                            containerColor = MaterialTheme.colorScheme.surface
                         ),
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -998,7 +999,7 @@ private fun IndependentQuizView(
             Card(
                 shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f)
+                    containerColor = MaterialTheme.colorScheme.surface
                 ),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -1496,7 +1497,7 @@ private fun ThreeStageVocabularyGame(
             Card(
                 shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+                    containerColor = MaterialTheme.colorScheme.surface
                 ),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -1794,7 +1795,7 @@ private fun SpellingQuizView(
 
         Card(
             shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(

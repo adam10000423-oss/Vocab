@@ -85,6 +85,7 @@ fun FlashcardReviewScreen(
     autoSpeak: Boolean = false,
     continueInBackground: Boolean = false,
     showFloatingOverlay: Boolean = false,
+    themeMode: String = "SYSTEM",
     onRecordReview: (Flashcard, Int) -> Unit,
     onUndoReview: (Flashcard) -> Unit = {},
     onToggleFavorite: (Flashcard) -> Unit,
@@ -331,6 +332,7 @@ fun FlashcardReviewScreen(
         autoSpeak,
         continueInBackground,
         showFloatingOverlay,
+        themeMode,
         currentCard?.id,
         isFlipped,
         roundFinished
@@ -342,7 +344,8 @@ fun FlashcardReviewScreen(
                 word = card.word,
                 definition = card.definition,
                 isBack = isFlipped,
-                showOverlay = showFloatingOverlay
+                showOverlay = showFloatingOverlay,
+                themeMode = themeMode
             )
         } else {
             AutoPlayOverlayService.stop(context)

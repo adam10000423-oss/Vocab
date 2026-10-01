@@ -35,7 +35,7 @@ fun CalmEmptyState(
     Card(
         shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.62f)
+            containerColor = MaterialTheme.colorScheme.surface
         ),
         modifier = modifier.fillMaxWidth()
     ) {

@@ -274,7 +274,7 @@ fun CardListScreen(
                             onAddNewCard()
                         },
                         shape = RoundedCornerShape(14.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
@@ -301,7 +301,7 @@ fun CardListScreen(
                             onOpenExternalImport()
                         },
                         shape = RoundedCornerShape(14.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
@@ -332,7 +332,7 @@ fun CardListScreen(
                             onOpenScanner()
                         },
                         shape = RoundedCornerShape(14.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
@@ -617,7 +617,12 @@ fun CardListScreen(
                     }
                 },
                 singleLine = true,
-                shape = RoundedCornerShape(16.dp),
+                colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                    unfocusedBorderColor = Color.Transparent,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
+                ),
+                shape = RoundedCornerShape(28.dp),
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 50.dp)
@@ -889,7 +894,7 @@ private fun CardListItem(
                     Icon(
                         imageVector = if (card.isFavorite) Icons.Filled.Star else Icons.Outlined.StarBorder,
                         contentDescription = if (card.isFavorite) "取消收藏" else "加入收藏",
-                        tint = if (card.isFavorite) Color(0xFFFFB800) else MaterialTheme.colorScheme.outline
+                        tint = if (card.isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
                     )
                 }
                 IconButton(onClick = onEditCard) {

@@ -100,12 +100,6 @@ fun SettingsScreen(
     onIntChange: (String, Int) -> Unit,
     onReminderTimesChange: (List<ReminderTime>) -> Unit,
     onThemeChange: (String) -> Unit,
-    onThemeColorPresetChange: (String) -> Unit,
-    onCustomThemeColorsChange: (String, String) -> Unit,
-    onGradientColorsChange: (String, String) -> Unit,
-    onCustomTextColorChange: (String) -> Unit,
-    onBackgroundAppearanceChange: (Float, Float) -> Unit,
-    onFontAppearanceChange: (String, String, Float) -> Unit,
     onSpeechRateChange: (Float) -> Unit,
     onDictionarySourceChange: (String) -> Unit,
     ttsVoices: List<TtsVoiceOption>,
@@ -134,6 +128,8 @@ fun SettingsScreen(
     onClearAllData: () -> Unit,
     onBack: () -> Unit
 ) {
+    var settingsPage by rememberSaveable { mutableStateOf("設定") }
+    androidx.activity.compose.BackHandler(enabled = settingsPage != "設定") { settingsPage = "設定" }
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     var updateStatus by remember { mutableStateOf("尚未檢查更新") }
@@ -146,30 +142,6 @@ fun SettingsScreen(
     var promptInput by remember(settings.aiWordPrompt) { mutableStateOf(settings.aiWordPrompt) }
     var imagePromptInput by remember(settings.aiImagePrompt) {
         mutableStateOf(settings.aiImagePrompt)
-    }
-    var customPrimaryInput by remember(settings.customPrimaryColor) {
-        mutableStateOf(settings.customPrimaryColor)
-    }
-    var customSecondaryInput by remember(settings.customSecondaryColor) {
-        mutableStateOf(settings.customSecondaryColor)
-    }
-    var gradientStartInput by remember(settings.gradientStartColor) {
-        mutableStateOf(settings.gradientStartColor)
-    }
-    var gradientEndInput by remember(settings.gradientEndColor) {
-        mutableStateOf(settings.gradientEndColor)
-    }
-    var customTextColorInput by remember(settings.customTextColor) {
-        mutableStateOf(settings.customTextColor)
-    }
-    var brightnessInput by remember(settings.backgroundBrightness) {
-        mutableStateOf(settings.backgroundBrightness)
-    }
-    var opacityInput by remember(settings.backgroundOpacity) {
-        mutableStateOf(settings.backgroundOpacity)
-    }
-    var fontScaleInput by remember(settings.fontScale) {
-        mutableStateOf(settings.fontScale)
     }
     var showClearDataDialog by remember { mutableStateOf(false) }
     val installPermissionLauncher = rememberLauncherForActivityResult(
@@ -371,9 +343,9 @@ fun SettingsScreen(
         topBar = {
             TopAppBar(
                 expandedHeight = 48.dp,
-                title = { Text("設定", fontWeight = FontWeight.Bold) },
+                title = { Text(settingsPage, fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = { if (settingsPage == "設定") onBack() else settingsPage = "設定" }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
                     }
                 }
@@ -384,173 +356,48 @@ fun SettingsScreen(
             modifier = Modifier.padding(padding).padding(top = 6.dp).padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            item {
-                SettingsSection("外觀") {
-                    Text("主題配色", fontWeight = FontWeight.Bold)
-                    val themePresets = listOf(
-                        "BLACK" to "黑色",
-                        "WHITE" to "白色",
-                        "DEEP_BLUE" to "深藍",
-                        "LIGHT_BLUE" to "淺藍",
-                        "TEAL" to "藍綠",
-                        "GREEN" to "綠色",
-                        "PINK" to "粉色",
-                        "RED" to "紅色",
-                        "PURPLE" to "紫色",
-                        "ORANGE" to "橘色",
-                        "CUSTOM" to "自訂"
-                    )
-                    SettingDropdown(
-                        label = "主題",
-                        value = settings.themeColorPreset,
-                        options = themePresets.map { it.first },
-                        optionText = { value ->
-                            themePresets.firstOrNull { it.first == value }?.second ?: value
-                        },
-                        onSelected = onThemeColorPresetChange
-                    )
-                    if (settings.themeColorPreset == "CUSTOM") {
+            if (settingsPage == "設定") {
+                items(listOf(
+                    "外觀" to "跟隨系統、亮色與暗色",
+                    "學習" to "每日目標與複習",
+                    "AI" to "連線、模型與補齊",
+                    "掃描與文件" to "教材辨識與匯入",
+                    "單字查詢" to "辭典與翻譯來源",
+                    "發音與提醒" to "朗讀、自動播放與通知",
+                    "更新" to "版本與下載",
+                    "資料" to "備份、匯出與還原"
+                )) { (title, subtitle) ->
+                    Surface(
+                        onClick = { settingsPage = title },
+                        shape = MaterialTheme.shapes.medium,
+                        color = MaterialTheme.colorScheme.surface,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            Modifier.padding(18.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            ColorPickerButton(
-                                label = "主色",
-                                colorHex = customPrimaryInput,
-                                onColorSelected = { selected ->
-                                    customPrimaryInput = selected
-                                    onCustomThemeColorsChange(selected, customSecondaryInput)
-                                },
-                                modifier = Modifier.weight(1f)
-                            )
-                            ColorPickerButton(
-                                label = "輔助色",
-                                colorHex = customSecondaryInput,
-                                onColorSelected = { selected ->
-                                    customSecondaryInput = selected
-                                    onCustomThemeColorsChange(customPrimaryInput, selected)
-                                },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    }
-                    SettingSwitch("使用漸層背景", settings.gradientEnabled) {
-                        onBooleanChange("gradientEnabled", it)
-                    }
-                    if (settings.gradientEnabled) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            ColorPickerButton(
-                                label = "漸層起點",
-                                colorHex = gradientStartInput,
-                                onColorSelected = { selected ->
-                                    gradientStartInput = selected
-                                    onGradientColorsChange(selected, gradientEndInput)
-                                },
-                                modifier = Modifier.weight(1f)
-                            )
-                            ColorPickerButton(
-                                label = "漸層終點",
-                                colorHex = gradientEndInput,
-                                onColorSelected = { selected ->
-                                    gradientEndInput = selected
-                                    onGradientColorsChange(gradientStartInput, selected)
-                                },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    }
-                    Text("背景亮度 ${(brightnessInput * 100).toInt()}%")
-                    Slider(
-                        value = brightnessInput,
-                        onValueChange = { brightnessInput = it },
-                        onValueChangeFinished = {
-                            onBackgroundAppearanceChange(brightnessInput, opacityInput)
-                        },
-                        valueRange = 0.55f..1.35f
-                    )
-                    Text("背景透明度 ${(opacityInput * 100).toInt()}%")
-                    Slider(
-                        value = opacityInput,
-                        onValueChange = { opacityInput = it },
-                        onValueChangeFinished = {
-                            onBackgroundAppearanceChange(brightnessInput, opacityInput)
-                        },
-                        valueRange = 0.55f..1f
-                    )
-                    SettingDropdown(
-                        label = "中文字體",
-                        value = settings.fontFamily,
-                        options = listOf("DEFAULT", "ROUNDED", "SANS_SERIF", "SERIF", "CURSIVE", "MONOSPACE"),
-                        optionText = {
-                            when (it) {
-                                "ROUNDED" -> "柔和圓體"
-                                "SANS_SERIF" -> "現代無襯線"
-                                "SERIF" -> "典雅襯線"
-                                "CURSIVE" -> "優雅手寫體"
-                                "MONOSPACE" -> "俐落等寬體"
-                                else -> "系統字體"
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(title, style = MaterialTheme.typography.titleMedium)
+                                Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
-                        },
-                        onSelected = {
-                            onFontAppearanceChange(it, settings.englishFontFamily, settings.fontScale)
+                            Text("›", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                    )
-                    SettingDropdown(
-                        label = "英文字體",
-                        value = settings.englishFontFamily,
-                        options = listOf("DEFAULT", "INTER", "NUNITO", "PLAYFAIR", "CAVEAT", "JETBRAINS_MONO"),
-                        optionText = {
-                            when (it) {
-                                "INTER" -> "Inter・清晰現代"
-                                "NUNITO" -> "Nunito・柔和圓潤"
-                                "PLAYFAIR" -> "Playfair・優雅襯線"
-                                "CAVEAT" -> "Caveat・自然手寫"
-                                "JETBRAINS_MONO" -> "JetBrains Mono・俐落等寬"
-                                else -> "Roboto・系統風格"
-                            }
-                        },
-                        onSelected = {
-                            onFontAppearanceChange(settings.fontFamily, it, settings.fontScale)
-                        }
-                    )
-                    Text("字體大小 ${(fontScaleInput * 100).toInt()}%")
-                    Slider(
-                        value = fontScaleInput,
-                        onValueChange = { fontScaleInput = it },
-                        onValueChangeFinished = {
-                            onFontAppearanceChange(
-                                settings.fontFamily,
-                                settings.englishFontFamily,
-                                fontScaleInput
-                            )
-                        },
-                        valueRange = 0.85f..1.3f
-                    )
-                    SettingSwitch("自訂字體顏色", settings.customTextColorEnabled) {
-                        onBooleanChange("customTextColorEnabled", it)
-                    }
-                    if (settings.customTextColorEnabled) {
-                        ColorPickerButton(
-                            label = "字體顏色",
-                            colorHex = customTextColorInput,
-                            onColorSelected = { selected ->
-                                customTextColorInput = selected
-                                onCustomTextColorChange(selected)
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Text(
-                            "對比不足時會自動改用清楚的預設文字色",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
                     }
                 }
             }
-            item {
+            if (settingsPage == "外觀") item {
+                SettingsSection("主題") {
+                    SettingDropdown(
+                        label = "顯示模式",
+                        value = settings.themeMode,
+                        options = listOf("SYSTEM", "LIGHT", "DARK"),
+                        optionText = { when (it) { "LIGHT" -> "亮色"; "DARK" -> "暗色"; else -> "跟隨系統" } },
+                        onSelected = onThemeChange
+                    )
+                }
+            }
+            if (settingsPage == "學習") item {
                 SettingsSection("學習") {
                     NumberSetting("每日學習目標", settings.dailyGoalCards, 5, 5..100, suffix = " 張") {
                         onIntChange("dailyGoalCards", it)
@@ -566,8 +413,8 @@ fun SettingsScreen(
                     }
                 }
             }
-            item {
-                SettingsSection("AI 補齊", initiallyExpanded = false) {
+            if (settingsPage == "AI") item {
+                SettingsSection("AI 補齊") {
                     SettingSwitch("啟用 AI 補齊", settings.aiEnabled) { onBooleanChange("aiEnabled", it) }
                     SettingSwitch("AI 結果套用前確認", settings.aiRequiresConfirmation) {
                         onBooleanChange("aiRequiresConfirmation", it)
@@ -615,8 +462,8 @@ fun SettingsScreen(
                     }
                 }
             }
-            item {
-                SettingsSection("AI 連線", initiallyExpanded = false) {
+            if (settingsPage == "AI") item {
+                SettingsSection("AI 連線") {
                     val provider = AiProvider.from(settings.aiProvider)
                     val selectedProviderConfigured =
                         aiApiProfiles.any { it.provider == provider }
@@ -788,7 +635,7 @@ fun SettingsScreen(
                     )
                 }
             }
-            item {
+            if (settingsPage == "掃描與文件") item {
                 SettingsSection("掃描與文件") {
                     Text(
                         "拍照、相片與掃描頁面會直接送到目前選擇的多模態 AI 模型。",
@@ -833,8 +680,8 @@ fun SettingsScreen(
                     }
                 }
             }
-            item {
-                SettingsSection("單字查詢", initiallyExpanded = false) {
+            if (settingsPage == "單字查詢") item {
+                SettingsSection("單字查詢") {
                     SettingDropdown(
                         label = "線上字典來源",
                         value = settings.dictionarySource,
@@ -857,7 +704,7 @@ fun SettingsScreen(
                     )
                 }
             }
-            item {
+            if (settingsPage == "發音與提醒") item {
                 SettingsSection("發音與提醒") {
                     SettingSwitch("翻卡後自動朗讀", settings.autoSpeak) { onBooleanChange("autoSpeak", it) }
                     SettingSwitch("離開 App 後繼續自動朗讀", settings.ttsContinueInBackground) {
@@ -1012,8 +859,8 @@ fun SettingsScreen(
                     }
                 }
             }
-            item {
-                SettingsSection("更新", initiallyExpanded = false) {
+            if (settingsPage == "更新") item {
+                SettingsSection("更新") {
                     SettingSwitch("自動檢查更新", settings.autoCheckUpdates) {
                         onBooleanChange("autoCheckUpdates", it)
                     }
@@ -1067,8 +914,8 @@ fun SettingsScreen(
                     }
                 }
             }
-            item {
-                SettingsSection("資料", initiallyExpanded = false) {
+            if (settingsPage == "資料") item {
+                SettingsSection("資料") {
                     Text("單字與學習資料預設只儲存在本機。")
                     Button(
                         onClick = { backupLauncher.launch("vocab-backup.json") },
@@ -1103,121 +950,6 @@ fun SettingsScreen(
 
 private const val CUSTOM_MODEL_OPTION = "__custom_model__"
 private const val AUTO_TTS_VOICE = "__auto_tts_voice__"
-
-@Composable
-private fun ColorPickerButton(
-    label: String,
-    colorHex: String,
-    onColorSelected: (String) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    var showPicker by rememberSaveable(label) { mutableStateOf(false) }
-    val currentColor = remember(colorHex) { parseColorOrDefault(colorHex) }
-
-    Card(
-        modifier = modifier.clickable { showPicker = true },
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Surface(
-                modifier = Modifier.size(30.dp),
-                shape = CircleShape,
-                color = currentColor
-            ) {}
-            Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-            Text("選擇", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-        }
-    }
-
-    if (showPicker) {
-        val initialHsv = remember(colorHex, showPicker) { colorHexToHsv(colorHex) }
-        var hue by remember(colorHex, showPicker) { mutableStateOf(initialHsv[0]) }
-        var saturation by remember(colorHex, showPicker) { mutableStateOf(initialHsv[1]) }
-        var value by remember(colorHex, showPicker) { mutableStateOf(initialHsv[2]) }
-        val previewHex = hsvToHex(hue, saturation, value)
-        val quickColors = remember {
-            listOf(
-                "#111827", "#FFFFFF", "#173B63", "#5EA9E8", "#168A8A", "#3F8C69",
-                "#E78BB4", "#D9534F", "#845EC2", "#E98B3A", "#F2C94C", "#8D6E63"
-            )
-        }
-
-        AlertDialog(
-            onDismissRequest = { showPicker = false },
-            title = { Text("選擇$label") },
-            text = {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.verticalScroll(rememberScrollState())
-                ) {
-                    Surface(
-                        modifier = Modifier.fillMaxWidth().height(54.dp),
-                        shape = RoundedCornerShape(14.dp),
-                        color = parseColorOrDefault(previewHex)
-                    ) {}
-                    Text("常用調色盤", style = MaterialTheme.typography.labelMedium)
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(quickColors) { hex ->
-                            Surface(
-                                onClick = {
-                                    val hsv = colorHexToHsv(hex)
-                                    hue = hsv[0]
-                                    saturation = hsv[1]
-                                    value = hsv[2]
-                                },
-                                modifier = Modifier.size(34.dp),
-                                shape = CircleShape,
-                                color = parseColorOrDefault(hex)
-                            ) {}
-                        }
-                    }
-                    Text("色相 ${hue.toInt()}°", style = MaterialTheme.typography.labelMedium)
-                    Slider(value = hue, onValueChange = { hue = it }, valueRange = 0f..360f)
-                    Text("鮮豔度 ${(saturation * 100).toInt()}%", style = MaterialTheme.typography.labelMedium)
-                    Slider(value = saturation, onValueChange = { saturation = it }, valueRange = 0f..1f)
-                    Text("亮度 ${(value * 100).toInt()}%", style = MaterialTheme.typography.labelMedium)
-                    Slider(value = value, onValueChange = { value = it }, valueRange = 0f..1f)
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        onColorSelected(previewHex)
-                        showPicker = false
-                    }
-                ) { Text("套用") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showPicker = false }) { Text("取消") }
-            }
-        )
-    }
-}
-
-private fun colorHexToHsv(colorHex: String): FloatArray {
-    val hsv = FloatArray(3)
-    android.graphics.Color.colorToHSV(
-        runCatching { android.graphics.Color.parseColor(colorHex) }
-            .getOrDefault(android.graphics.Color.DKGRAY),
-        hsv
-    )
-    return hsv
-}
-
-private fun hsvToHex(hue: Float, saturation: Float, value: Float): String {
-    val color = android.graphics.Color.HSVToColor(floatArrayOf(hue, saturation, value))
-    return String.format("#%06X", color and 0xFFFFFF)
-}
-
-private fun parseColorOrDefault(colorHex: String): Color = Color(
-    runCatching { android.graphics.Color.parseColor(colorHex) }
-        .getOrDefault(android.graphics.Color.DKGRAY)
-)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1263,13 +995,11 @@ private fun SettingDropdown(
 @Composable
 private fun SettingsSection(
     title: String,
-    initiallyExpanded: Boolean = false,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    var expanded by rememberSaveable(title) { mutableStateOf(initiallyExpanded) }
     Card(
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.62f)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
@@ -1277,9 +1007,7 @@ private fun SettingsSection(
             verticalArrangement = Arrangement.spacedBy(9.dp)
         ) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { expanded = !expanded },
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
@@ -1288,13 +1016,9 @@ private fun SettingsSection(
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f)
                 )
-                Icon(
-                    imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                    contentDescription = if (expanded) "收合" else "展開",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+
             }
-            if (expanded) content()
+            content()
         }
     }
 }
