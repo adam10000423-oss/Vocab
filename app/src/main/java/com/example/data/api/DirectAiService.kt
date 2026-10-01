@@ -223,24 +223,36 @@ object DirectAiService {
 
     suspend fun enrich(config: PersonalAiConfig, candidates: List<OcrCardCandidate>): List<OcrCardCandidate> {
         if (candidates.isEmpty()) return candidates
-        val words = candidates.map { it.word.trim() }
-            .filter { it.isNotBlank() }
-            .distinctBy { it.lowercase() }
+        val sourceCards = candidates
+            .filter { it.word.isNotBlank() }
+            .distinctBy { it.word.trim().lowercase() }
             .take(200)
         val enriched = linkedMapOf<String, OcrCardCandidate>()
-        words.chunked(12).forEach { wordBatch ->
+        sourceCards.chunked(12).forEach { cardBatch ->
+            val inputCards = JSONArray().apply {
+                cardBatch.forEach { card ->
+                    put(JSONObject()
+                        .put("word", card.word.trim())
+                        .put("phonetic", card.phonetic)
+                        .put("partOfSpeech", card.partOfSpeech)
+                        .put("definition", card.definition)
+                        .put("exampleSentence", card.exampleSentence)
+                        .put("exampleTranslation", card.exampleTranslation))
+                }
+            }
             val prompt = """
-                Provide reliable dictionary data for exactly these English words:
-                ${wordBatch.joinToString(", ")}
+                Complete only the missing fields in these English flashcards:
+                $inputCards
 
                 Return exactly one JSON object:
                 {"cards":[{"word":"","phonetic":"","partOfSpeech":"","definition":"","exampleSentence":"","exampleTranslation":""}]}
 
                 Requirements:
-                - Return at most one card for each requested word and no other words.
-                - Preserve the exact requested spelling.
+                - Return at most one card for each input word and no other words.
+                - Preserve the exact input word and every non-empty field verbatim.
                 - definition and exampleTranslation use Traditional Chinese.
-                - exampleSentence is a complete natural English sentence.
+                - If exampleSentence is already non-empty and exampleTranslation is empty, translate that exact English sentence faithfully. Never invent a different Chinese sentence and never replace the English sentence.
+                - Only create a new natural exampleSentence when the input exampleSentence is empty; its exampleTranslation must translate that newly created sentence exactly.
                 - phonetic is required and must use reliable American KK notation wrapped in /.../.
                 - Never substitute another word.
                 - Do not include Markdown or commentary.
@@ -251,7 +263,7 @@ object DirectAiService {
                 is JSONArray -> payload
                 else -> null
             }
-            val requested = wordBatch.toSet()
+            val requested = cardBatch.mapTo(hashSetOf()) { it.word.trim() }
             items.toCandidates()
                 .filter { it.word in requested }
                 .forEach { enriched[it.word.lowercase()] = it }

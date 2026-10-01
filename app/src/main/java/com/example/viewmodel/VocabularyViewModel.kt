@@ -2606,6 +2606,7 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
                     "TRANSFER_CARDS" -> executeAssistantCardTransfer(action)
                     "ADD_CARDS" -> executeAssistantAddCards(action)
                     "ENRICH_CARDS" -> executeAssistantCardEnrichment(action)
+                    "NORMALIZE_CHINESE" -> executeAssistantChineseNormalization(action)
                     "SPLIT_FOLDER" -> executeAssistantSplitFolder(action)
                     "MERGE_FOLDERS" -> executeAssistantMergeFolders(action)
                     "CREATE_WEAKNESS_FOLDER" -> executeAssistantWeaknessFolder(action)
@@ -2814,6 +2815,46 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
             payload = JSONObject().put("updates", safe).toString()
         )
         appendAssistantMessage("ASSISTANT", "已核對空白欄位，請確認批次補齊。", kind = "STATUS")
+    }
+
+    private fun prepareAssistantChineseNormalization(result: JSONObject, message: String) {
+        val source = result.optJSONArray("updates") ?: JSONArray()
+        val currentById = allCards.value.associateBy { it.id }
+        val editableDeckIds = _assistantSelectedDeckIds.value
+        val safe = JSONArray()
+        for (index in 0 until source.length()) {
+            val item = source.optJSONObject(index) ?: continue
+            val card = currentById[item.optLong("cardId")] ?: continue
+            if (card.deckId !in editableDeckIds) continue
+            val definition = item.optString("definition", card.definition).trim().take(500)
+            val exampleTranslation = item.optString("exampleTranslation", card.exampleTranslation).trim().take(600)
+            if (definition.isBlank() && card.definition.isNotBlank()) continue
+            if (exampleTranslation.isBlank() && card.exampleTranslation.isNotBlank()) continue
+            if (definition == card.definition && exampleTranslation == card.exampleTranslation) continue
+            safe.put(
+                JSONObject()
+                    .put("cardId", card.id)
+                    .put("word", card.word)
+                    .put("definition", definition)
+                    .put("exampleTranslation", exampleTranslation)
+            )
+        }
+        if (safe.length() == 0) {
+            appendAssistantMessage("ASSISTANT", "$message\n\n沒有找到需要轉換，或可安全套用的繁體中文修改。")
+            return
+        }
+        val deckNames = allDecks.value
+            .filter { it.id in editableDeckIds }
+            .joinToString("、") { it.name }
+        _assistantPendingAction.value = AssistantPendingAction(
+            id = UUID.randomUUID().toString(),
+            type = "NORMALIZE_CHINESE",
+            deckId = 0,
+            title = "統一 ${safe.length()} 張單字卡為繁體中文",
+            description = "範圍：${deckNames.ifBlank { "已選資料夾" }}\n只修改中文解釋與例句翻譯；英文、詞性和例句不會變動。",
+            payload = safe.toString()
+        )
+        appendAssistantMessage("ASSISTANT", "已檢查所選資料夾並準備繁體中文修改，確認後才會套用。", kind = "STATUS")
     }
 
     private fun prepareAssistantSplit(result: JSONObject, fallbackDeck: Deck?, message: String) {
@@ -3056,6 +3097,49 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
         )
     }
 
+    private suspend fun executeAssistantChineseNormalization(action: AssistantPendingAction): AssistantPendingAction {
+        val updates = JSONArray(action.payload)
+        val currentById = allCards.value.associateBy { it.id }
+        val editableDeckIds = _assistantSelectedDeckIds.value
+        val old = JSONArray()
+        val changed = buildList {
+            for (index in 0 until updates.length()) {
+                val item = updates.optJSONObject(index) ?: continue
+                val card = currentById[item.optLong("cardId")] ?: continue
+                if (card.deckId !in editableDeckIds) continue
+                val definition = item.optString("definition", card.definition).trim().take(500)
+                val exampleTranslation = item.optString("exampleTranslation", card.exampleTranslation).trim().take(600)
+                if (definition.isBlank() && card.definition.isNotBlank()) continue
+                if (exampleTranslation.isBlank() && card.exampleTranslation.isNotBlank()) continue
+                val updated = card.copy(
+                    definition = definition,
+                    exampleTranslation = exampleTranslation
+                )
+                if (updated == card) continue
+                old.put(
+                    JSONObject()
+                        .put("cardId", card.id)
+                        .put("phonetic", card.phonetic)
+                        .put("partOfSpeech", card.partOfSpeech)
+                        .put("definition", card.definition)
+                        .put("exampleSentence", card.exampleSentence)
+                        .put("exampleTranslation", card.exampleTranslation)
+                )
+                add(updated)
+            }
+        }
+        require(changed.isNotEmpty()) { "沒有找到需要轉換的中文內容" }
+        repository.updateCards(changed)
+        return AssistantPendingAction(
+            id = UUID.randomUUID().toString(),
+            type = "RESTORE_CARD_FIELDS",
+            deckId = 0,
+            title = "復原繁體中文統一",
+            description = "恢復 ${changed.size} 張卡片修改前的中文內容",
+            payload = old.toString()
+        )
+    }
+
     private suspend fun executeAssistantSplitFolder(action: AssistantPendingAction): AssistantPendingAction {
         val payload = JSONObject(action.payload)
         val sourceDeck = allDecks.value.firstOrNull { it.id == action.deckId } ?: error("找不到來源資料夾")
@@ -3227,6 +3311,7 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
             "TRANSFER_CARDS" -> prepareAssistantTransfer(result, message)
             "ADD_CARDS" -> prepareAssistantAddCards(result, message)
             "ENRICH_CARDS" -> prepareAssistantEnrichment(result, message)
+            "NORMALIZE_CHINESE" -> prepareAssistantChineseNormalization(result, message)
             "SPLIT_FOLDER" -> prepareAssistantSplit(result, fallbackDeck, message)
             "MERGE_FOLDERS" -> prepareAssistantMerge(result, message)
             "CREATE_WEAKNESS_FOLDER" -> prepareAssistantWeaknessFolder(result, message)
@@ -3408,7 +3493,7 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
             但不要為普通短句加入多餘格式，也不要輸出 HTML。
 
             type 只能是 REPLY、CREATE_FOLDER、UPDATE_FOLDER、UPDATE_GRAMMAR、TRANSFER_CARDS、ADD_CARDS、SPLIT_FOLDER、
-            MERGE_FOLDERS、ENRICH_CARDS、AUDIT_REPORT、CREATE_WEAKNESS_FOLDER、UPDATE_DAILY_PLAN、
+            MERGE_FOLDERS、ENRICH_CARDS、NORMALIZE_CHINESE、AUDIT_REPORT、CREATE_WEAKNESS_FOLDER、UPDATE_DAILY_PLAN、
             LEARNING_ANALYSIS、SORT、COUNTABILITY、ARTICLE、CONFUSABLES、QUIZ。
             通用格式：{"type":"REPLY","message":"繁體中文回覆","deckId":0}
             使用者要求新增或建立資料夾時使用 CREATE_FOLDER，另加：
@@ -3427,6 +3512,9 @@ class VocabularyViewModel(application: Application) : AndroidViewModel(applicati
             MERGE_FOLDERS：{"type":"MERGE_FOLDERS","targetDeckId":1,"sourceDeckIds":[2,3]}
             ENRICH_CARDS：{"type":"ENRICH_CARDS","updates":[{"cardId":1,"phonetic":"","partOfSpeech":"","definition":"","exampleSentence":"","exampleTranslation":""}]}
             只能補空白欄位，內容必須可靠，不可改寫既有欄位。
+            NORMALIZE_CHINESE：{"type":"NORMALIZE_CHINESE","updates":[{"cardId":1,"definition":"繁體中文解釋","exampleTranslation":"繁體中文例句翻譯"}]}
+            只有使用者明確要求統一、修正或轉換中文文字時使用。逐張檢查提供的真實卡片，只把 definition 與 exampleTranslation 的簡體中文轉為繁體中文；
+            必須保留原意、標點和原有內容，不可翻譯或改寫英文欄位，也不可用新的例句取代原文。沒有變更的卡片不要放入 updates。
             AUDIT_REPORT：另加 suspectedTypos：[ {"cardId":1,"suggestion":"正確拼字","reason":"理由"} ]；不確定就不要列為拼錯。
             CREATE_WEAKNESS_FOLDER：{"type":"CREATE_WEAKNESS_FOLDER","name":"弱點複習","category":"課程，未指定留空","cardIds":[真實低評分或錯題卡ID]}
             UPDATE_DAILY_PLAN：{"type":"UPDATE_DAILY_PLAN","dailyGoalCards":20,"dailyNewCardLimit":10,"dailyReviewLimit":50,"message":"依真實紀錄說明理由"}

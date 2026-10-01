@@ -618,6 +618,8 @@ fun VocabApp(
                 sessionScopeId = reviewScopeId,
                 advancedSrs = settings.advancedSrs,
                 autoSpeak = settings.autoSpeak,
+                continueInBackground = settings.ttsContinueInBackground,
+                showFloatingOverlay = settings.ttsFloatingOverlay,
                 onRecordReview = viewModel::submitCardReview,
                 onUndoReview = viewModel::undoCardReview,
                 onToggleFavorite = viewModel::toggleFavorite,

@@ -29,6 +29,7 @@ import com.example.ui.theme.presetForcesDark
 import com.example.ui.theme.themeGradientColors
 import com.example.ui.theme.customGradientColors
 import com.example.viewmodel.VocabularyViewModel
+import com.example.util.AutoPlayOverlayService
 
 class MainActivity : ComponentActivity() {
     private var widgetAction by mutableStateOf<String?>(null)
@@ -114,6 +115,16 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         widgetAction = intent.getStringExtra(EXTRA_WIDGET_ACTION)
         sharedText = intent.sharedEnglishText()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        AutoPlayOverlayService.setAppVisible(true)
+    }
+
+    override fun onStop() {
+        AutoPlayOverlayService.setAppVisible(false)
+        super.onStop()
     }
 
     private fun Intent.sharedEnglishText(): String? =

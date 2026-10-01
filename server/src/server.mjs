@@ -51,6 +51,17 @@ Return only a JSON array. Each object must contain:
 word, phonetic, partOfSpeech, definition, exampleSentence, exampleTranslation.`;
 }
 
+function enrichmentPrompt(cards) {
+  return `Complete only the missing fields in these English flashcards:
+${JSON.stringify(cards)}
+
+Return only a JSON array with word, phonetic, partOfSpeech, definition, exampleSentence and exampleTranslation.
+Preserve the exact input word and every non-empty field verbatim.
+Use Traditional Chinese for definition and exampleTranslation.
+If exampleSentence already exists and only exampleTranslation is missing, faithfully translate that exact English sentence. Never invent a different Chinese sentence or replace the English sentence.
+Only create a new natural English example when exampleSentence is empty, and translate that new sentence exactly.`;
+}
+
 function validateVocabularyItems(value, requestedWords = []) {
   const items = Array.isArray(value) ? value : [value];
   const allowed = new Set(requestedWords.map((word) => word.toLowerCase()));
@@ -219,13 +230,28 @@ TEXT:
 ${text}`, env);
         data = validateVocabularyItems(result);
       } else if (requestUrl.pathname === "/api/v1/vocabulary/enrich") {
-        const words = Array.isArray(body.words)
-          ? [...new Set(body.words.map((word) => String(word).trim()).filter((word) => WORD_PATTERN.test(word)))].slice(0, 80)
+        const cards = Array.isArray(body.cards)
+          ? body.cards.map((item) => ({
+              word: String(item?.word ?? "").trim(),
+              phonetic: String(item?.phonetic ?? "").trim(),
+              partOfSpeech: String(item?.partOfSpeech ?? "").trim(),
+              definition: String(item?.definition ?? "").trim(),
+              exampleSentence: String(item?.exampleSentence ?? "").trim(),
+              exampleTranslation: String(item?.exampleTranslation ?? "").trim()
+            })).filter((item) => WORD_PATTERN.test(item.word)).slice(0, 80)
           : [];
+        const words = cards.length > 0
+          ? [...new Set(cards.map((item) => item.word))]
+          : Array.isArray(body.words)
+            ? [...new Set(body.words.map((word) => String(word).trim()).filter((word) => WORD_PATTERN.test(word)))].slice(0, 80)
+            : [];
         if (words.length === 0) {
           throw Object.assign(new Error("請提供有效的英文單字"), { status: 400 });
         }
-        data = validateVocabularyItems(await generate(vocabularyPrompt(words), env), words);
+        data = validateVocabularyItems(
+          await generate(cards.length > 0 ? enrichmentPrompt(cards) : vocabularyPrompt(words), env),
+          words
+        );
       } else {
         return sendJson(response, 404, { error: "找不到服務端點" }, corsHeaders);
       }

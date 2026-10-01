@@ -71,6 +71,41 @@ test("details rejects a model response for a different word", async () => {
   });
 });
 
+test("enrichment sends the existing English example for faithful translation", async () => {
+  const sentence = "The hikers reached the shelter before the storm began.";
+  let receivedPrompt = "";
+  await withServer(async (prompt) => {
+    receivedPrompt = prompt;
+    return [{
+      word: "shelter",
+      phonetic: "/ˈʃɛltɚ/",
+      partOfSpeech: "n.",
+      definition: "避難所",
+      exampleSentence: sentence,
+      exampleTranslation: "暴風雨開始前，健行者抵達了避難所。"
+    }];
+  }, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/v1/vocabulary/enrich`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        cards: [{
+          word: "shelter",
+          phonetic: "/ˈʃɛltɚ/",
+          partOfSpeech: "n.",
+          definition: "避難所",
+          exampleSentence: sentence,
+          exampleTranslation: ""
+        }]
+      })
+    });
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).data[0].exampleSentence, sentence);
+    assert.match(receivedPrompt, new RegExp(sentence.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    assert.match(receivedPrompt, /faithfully translate that exact English sentence/i);
+  });
+});
+
 test("version endpoint returns update metadata", async () => {
   await withServer(async () => [], async (baseUrl) => {
     const response = await fetch(`${baseUrl}/api/v1/app/version`);

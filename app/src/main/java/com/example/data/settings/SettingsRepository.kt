@@ -49,6 +49,8 @@ class SettingsRepository(private val context: Context) {
         val pdfPageLimit = intPreferencesKey("pdf_page_limit")
         val dictionarySource = stringPreferencesKey("dictionary_source")
         val autoSpeak = booleanPreferencesKey("auto_speak")
+        val ttsContinueInBackground = booleanPreferencesKey("tts_continue_in_background")
+        val ttsFloatingOverlay = booleanPreferencesKey("tts_floating_overlay")
         val speechRate = floatPreferencesKey("speech_rate")
         val ttsVoiceStyle = stringPreferencesKey("tts_voice_style")
         val ttsVoiceName = stringPreferencesKey("tts_voice_name")
@@ -126,6 +128,8 @@ class SettingsRepository(private val context: Context) {
             dictionarySource = value[Keys.dictionarySource]
                 ?.takeIf { it in setOf("AUTO", "GOOGLE", "CAMBRIDGE", "WIKTIONARY", "FREE") } ?: "AUTO",
             autoSpeak = value[Keys.autoSpeak] ?: false,
+            ttsContinueInBackground = value[Keys.ttsContinueInBackground] ?: false,
+            ttsFloatingOverlay = value[Keys.ttsFloatingOverlay] ?: false,
             speechRate = (value[Keys.speechRate] ?: 1f).coerceIn(0.5f, 1.5f),
             ttsVoiceStyle = value[Keys.ttsVoiceStyle] ?: "NATURAL",
             ttsVoiceName = value[Keys.ttsVoiceName] ?: "",
@@ -167,6 +171,8 @@ class SettingsRepository(private val context: Context) {
             "usePersonalAiApi" -> Keys.usePersonalAiApi
             "ocrPreviewBeforeImport" -> Keys.ocrPreviewBeforeImport
             "autoSpeak" -> Keys.autoSpeak
+            "ttsContinueInBackground" -> Keys.ttsContinueInBackground
+            "ttsFloatingOverlay" -> Keys.ttsFloatingOverlay
             "ttsFrontReadWord" -> Keys.ttsFrontReadWord
             "ttsFrontSpellWord" -> Keys.ttsFrontSpellWord
             "ttsFrontReadPartOfSpeech" -> Keys.ttsFrontReadPartOfSpeech

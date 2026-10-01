@@ -46,6 +46,8 @@ data class AppSettings(
     val pdfPageLimit: Int = 20,
     val dictionarySource: String = "AUTO",
     val autoSpeak: Boolean = false,
+    val ttsContinueInBackground: Boolean = false,
+    val ttsFloatingOverlay: Boolean = false,
     val speechRate: Float = 1f,
     val ttsVoiceStyle: String = "NATURAL",
     val ttsVoiceName: String = "",

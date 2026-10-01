@@ -6,6 +6,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.provider.Settings as AndroidSettings
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -193,6 +195,17 @@ fun SettingsScreen(
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted -> onBooleanChange("remindersEnabled", granted) }
+    val overlayPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        val granted = AndroidSettings.canDrawOverlays(context)
+        onBooleanChange("ttsFloatingOverlay", granted)
+        if (granted) {
+            onBooleanChange("ttsContinueInBackground", true)
+        } else {
+            Toast.makeText(context, "未取得浮動視窗權限，仍可單獨使用背景朗讀", Toast.LENGTH_LONG).show()
+        }
+    }
 
     fun openReminderPicker(index: Int? = null) {
         val current = index?.let { settings.reminderTimes.getOrNull(it) }
@@ -847,6 +860,30 @@ fun SettingsScreen(
             item {
                 SettingsSection("發音與提醒") {
                     SettingSwitch("翻卡後自動朗讀", settings.autoSpeak) { onBooleanChange("autoSpeak", it) }
+                    SettingSwitch("離開 App 後繼續自動朗讀", settings.ttsContinueInBackground) {
+                        onBooleanChange("ttsContinueInBackground", it)
+                        if (!it) onBooleanChange("ttsFloatingOverlay", false)
+                    }
+                    SettingSwitch("背景朗讀時顯示浮動視窗", settings.ttsFloatingOverlay) { enabled ->
+                        if (!enabled) {
+                            onBooleanChange("ttsFloatingOverlay", false)
+                        } else if (AndroidSettings.canDrawOverlays(context)) {
+                            onBooleanChange("ttsContinueInBackground", true)
+                            onBooleanChange("ttsFloatingOverlay", true)
+                        } else {
+                            overlayPermissionLauncher.launch(
+                                Intent(
+                                    AndroidSettings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                    Uri.parse("package:${context.packageName}")
+                                )
+                            )
+                        }
+                    }
+                    Text(
+                        "背景朗讀會以低干擾通知維持播放；浮動視窗只在離開 Vocab 時出現，正面顯示英文、背面顯示中文。首次啟用需授予顯示在其他應用程式上層的權限。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                     SettingDropdown(
                         label = "聲音風格",
                         value = settings.ttsVoiceStyle,

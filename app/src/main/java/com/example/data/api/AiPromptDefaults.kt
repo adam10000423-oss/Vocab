@@ -8,6 +8,7 @@ object AiPromptDefaults {
 2. definition 必須使用繁體中文；不同詞性的意思用「／」分組，同詞性的多個意思用「；」分隔，而且順序要和 partOfSpeech 一致。
 3. exampleSentence 必須是自然、完整、適合學習者的英文例句。
 4. exampleTranslation 必須是該英文例句的完整繁體中文翻譯。
+   如果已經提供 exampleSentence 而只缺 exampleTranslation，必須逐句忠實翻譯原本的英文例句，禁止另寫新的中文句子或改動英文例句。
 5. phonetic 必須填入可靠的美式 KK 音標，使用 /.../ 包住；不可留空，也不可填入單字拼法或中文注音。
 
 範例 active：
@@ -34,6 +35,7 @@ exampleTranslation: 這隻狗非常活躍，喜歡在公園裡玩丟接遊戲。
 2. definition 必須使用繁體中文；不同詞性的意思用「／」分組，同詞性的多個意思用「；」分隔，而且順序要和 partOfSpeech 一致。
 3. exampleSentence 必須是自然、完整、適合學習者的英文例句。
 4. exampleTranslation 必須是該英文例句的完整繁體中文翻譯。
+   如果圖片或既有資料已提供 exampleSentence，缺少中文時只能翻譯該英文原句，不可另外生成不相符的中文句子。
 5. 需要補齊欄位時，phonetic 必須填入可靠的美式 KK 音標並使用 /.../ 包住；不可填入單字拼法或中文注音。
 
 範例 active：

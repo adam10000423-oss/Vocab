@@ -163,16 +163,24 @@ object GeminiService {
                 .onFailure { _lastError.value = it.message ?: "個人 AI API 呼叫失敗" }
                 .getOrDefault(candidates)
         }
-        val words = candidates
-            .map { it.word.trim() }
-            .filter { it.isNotBlank() }
-            .distinctBy { it.lowercase() }
+        val sourceCards = candidates
+            .filter { it.word.isNotBlank() }
+            .distinctBy { it.word.trim().lowercase() }
             .take(MAX_BATCH_WORDS)
-        if (words.isEmpty()) return candidates
+        if (sourceCards.isEmpty()) return candidates
 
         val data = post(
             "/api/v1/vocabulary/enrich",
-            JSONObject().put("words", JSONArray(words))
+            JSONObject().put("cards", JSONArray().apply {
+                sourceCards.forEach { card -> put(JSONObject()
+                    .put("word", card.word.trim())
+                    .put("phonetic", card.phonetic)
+                    .put("partOfSpeech", card.partOfSpeech)
+                    .put("definition", card.definition)
+                    .put("exampleSentence", card.exampleSentence)
+                    .put("exampleTranslation", card.exampleTranslation))
+                }
+            })
         ) as? JSONArray ?: return candidates
 
         val enrichedByWord = data.toCandidates().associateBy { it.word.lowercase() }

@@ -64,6 +64,10 @@ import com.example.data.learning.LearningRound
 import com.example.data.learning.LearningSessionStore
 import com.example.ui.components.FlipCard
 import com.example.ui.components.rememberResponsiveLayout
+import com.example.util.AutoPlayOverlayService
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.delay
 
 private enum class LearningStartChoice {
@@ -79,6 +83,8 @@ fun FlashcardReviewScreen(
     sessionScopeId: Long = 0L,
     advancedSrs: Boolean = false,
     autoSpeak: Boolean = false,
+    continueInBackground: Boolean = false,
+    showFloatingOverlay: Boolean = false,
     onRecordReview: (Flashcard, Int) -> Unit,
     onUndoReview: (Flashcard) -> Unit = {},
     onToggleFavorite: (Flashcard) -> Unit,
@@ -94,6 +100,7 @@ fun FlashcardReviewScreen(
     var isFlipped by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val hostView = LocalView.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val sessionStore = remember(context) { LearningSessionStore(context) }
     var remainingCardIds by remember(sessionScopeId) { mutableStateOf<List<Long>>(emptyList()) }
     var unfamiliarCardIds by remember(sessionScopeId) { mutableStateOf<Set<Long>>(emptySet()) }
@@ -123,12 +130,25 @@ fun FlashcardReviewScreen(
     }
     var orderDialogExitRequested by remember(sessionScopeId) { mutableStateOf(false) }
 
+    DisposableEffect(lifecycleOwner, continueInBackground) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP && !continueInBackground) {
+                autoPlaying = false
+                onStopSpeaking()
+                AutoPlayOverlayService.stop(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     DisposableEffect(hostView) {
         val previousKeepScreenOn = hostView.keepScreenOn
         hostView.keepScreenOn = true
         onDispose {
             hostView.keepScreenOn = previousKeepScreenOn
             onStopSpeaking()
+            AutoPlayOverlayService.stop(context)
         }
     }
 
@@ -303,6 +323,29 @@ fun FlashcardReviewScreen(
             delay(700)
             if (!autoPlaying) return@LaunchedEffect
             answerCurrent(true)
+        }
+    }
+
+    LaunchedEffect(
+        autoPlaying,
+        autoSpeak,
+        continueInBackground,
+        showFloatingOverlay,
+        currentCard?.id,
+        isFlipped,
+        roundFinished
+    ) {
+        val card = currentCard
+        if (autoPlaying && autoSpeak && continueInBackground && card != null && !roundFinished) {
+            AutoPlayOverlayService.update(
+                context = context,
+                word = card.word,
+                definition = card.definition,
+                isBack = isFlipped,
+                showOverlay = showFloatingOverlay
+            )
+        } else {
+            AutoPlayOverlayService.stop(context)
         }
     }
 
