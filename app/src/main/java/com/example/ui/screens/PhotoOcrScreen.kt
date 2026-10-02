@@ -1,4 +1,5 @@
 package com.example.ui.screens
+import androidx.compose.material3.FilledTonalIconButton
 
 import android.app.Activity
 import android.content.Context
@@ -38,8 +39,8 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material.icons.filled.PhotoLibrary
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
+import com.example.ui.components.ModernButton as Button
+import com.example.ui.components.ModernCard as Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -48,7 +49,7 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import com.example.ui.components.ModernOutlinedButton as OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -397,11 +398,8 @@ fun PhotoOcrScreen(
 
             val sourceButtonsEnabled = !isOcrScanning && !isScannerLaunching
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Button(
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                FilledTonalIconButton(
                     onClick = {
                         runCatching {
                             val photoFile = File.createTempFile(
@@ -431,13 +429,8 @@ fun PhotoOcrScreen(
                         .weight(1f)
                         .heightIn(min = 48.dp)
                         .testTag("take_photo_ocr_button")
-                ) {
-                    Icon(Icons.Default.CameraAlt, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("拍照", fontWeight = FontWeight.Bold)
-                }
-
-                FilledTonalButton(
+                ) { Icon(Icons.Default.CameraAlt, "拍照", modifier = Modifier.size(24.dp)) }
+                FilledTonalIconButton(
                     onClick = {
                         val activity = context.findActivity()
                         if (activity == null) {
@@ -471,18 +464,8 @@ fun PhotoOcrScreen(
                         .weight(1f)
                         .heightIn(min = 48.dp)
                         .testTag("document_scanner_button")
-                ) {
-                    Icon(Icons.Default.DocumentScanner, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("掃文件", fontWeight = FontWeight.Bold)
-                }
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                FilledTonalButton(
+                ) { Icon(Icons.Default.DocumentScanner, "掃描", modifier = Modifier.size(24.dp)) }
+                FilledTonalIconButton(
                     onClick = { photoPickerLauncher.launch("image/*") },
                     enabled = sourceButtonsEnabled && aiAvailable,
                     shape = RoundedCornerShape(14.dp),
@@ -490,13 +473,8 @@ fun PhotoOcrScreen(
                         .weight(1f)
                         .heightIn(min = 48.dp)
                         .testTag("select_photo_ocr_button")
-                ) {
-                    Icon(Icons.Default.PhotoLibrary, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("相片", fontWeight = FontWeight.Bold)
-                }
-
-                FilledTonalButton(
+                ) { Icon(Icons.Default.PhotoLibrary, "相片", modifier = Modifier.size(24.dp)) }
+                FilledTonalIconButton(
                     onClick = {
                         docPickerLauncher.launch(
                             arrayOf(
@@ -516,11 +494,7 @@ fun PhotoOcrScreen(
                         .weight(1f)
                         .heightIn(min = 48.dp)
                         .testTag("select_file_doc_button")
-                ) {
-                    Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("檔案", fontWeight = FontWeight.Bold)
-                }
+                ) { Icon(Icons.Default.Folder, "檔案", modifier = Modifier.size(24.dp)) }
             }
 
             if (isOcrScanning || isScannerLaunching) {

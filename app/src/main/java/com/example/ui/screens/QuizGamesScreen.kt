@@ -1,4 +1,6 @@
 package com.example.ui.screens
+import com.example.ui.components.ModernChoiceRow
+import com.example.ui.components.ModernCollectionRow
 
 import android.Manifest
 import android.content.Intent
@@ -52,18 +54,18 @@ import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Style
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
+import com.example.ui.components.ModernAlertDialog as AlertDialog
+import com.example.ui.components.ModernButton as Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
+import com.example.ui.components.ModernCard as Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
+import com.example.ui.components.ModernOutlinedButton as OutlinedButton
+import com.example.ui.components.ModernTextField as OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
@@ -432,98 +434,7 @@ fun QuizGamesScreen(
                         MaterialTheme.colorScheme.primary
                     }
 
-                    Card(
-                        shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surface
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(14.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(14.dp)
-                                            .clip(CircleShape)
-                                            .background(deckColor)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Column {
-                                        Text(
-                                            text = deck.name,
-                                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                        Text(
-                                            text = deck.category,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
-                                    }
-                                }
-
-                                Surface(
-                                    shape = RoundedCornerShape(10.dp),
-                                    color = MaterialTheme.colorScheme.secondaryContainer
-                                ) {
-                                    Text(
-                                        text = "$totalCards 張",
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                        color = MaterialTheme.colorScheme.onSecondaryContainer
-                                    )
-                                }
-                            }
-
-                            // Action buttons toolbar matching Tab 2 and Tab 3 with polished icons
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                OutlinedButton(
-                                    onClick = { onOpenDeckManagement(deck.id) },
-                                    shape = RoundedCornerShape(12.dp),
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Text("管理", fontWeight = FontWeight.Bold)
-                                }
-
-                                OutlinedButton(
-                                    onClick = { onJumpToStudy(deck.id) },
-                                    enabled = totalCards > 0,
-                                    shape = RoundedCornerShape(12.dp),
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Text("學習", fontWeight = FontWeight.Bold)
-                                }
-
-                                Button(
-                                    onClick = {
-                                        pendingGameSelection = setOf(deck.id) to deck.name
-                                    },
-                                    enabled = totalCards > 0,
-                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                                    shape = RoundedCornerShape(12.dp),
-                                    modifier = Modifier.weight(1.2f).testTag("select_game_deck_${deck.id}")
-                                ) {
-                                    Text("測驗", fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
-                    }
+ModernCollectionRow(title = deck.name, subtitle = deck.category, count = totalCards, mode = "quiz", onManage = { onOpenDeckManagement(deck.id) }, onLearn = { onJumpToStudy(deck.id) }, onQuiz = { pendingGameSelection = setOf(deck.id) to deck.name }, primaryActionModifier = Modifier.testTag("select_game_deck_${deck.id}"))
                 }
             }
 
@@ -1067,21 +978,7 @@ private fun IndependentQuizView(
                 options.forEach { option ->
                     val selected = selectedOption == option
                     val correctOption = option.equals(expectedAnswer(), ignoreCase = true)
-                    OutlinedButton(
-                        onClick = { if (answerResult == null) selectedOption = option },
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            containerColor = when {
-                                answerResult != null && correctOption -> MaterialTheme.colorScheme.primaryContainer
-                                answerResult == false && selected -> MaterialTheme.colorScheme.errorContainer
-                                selected -> MaterialTheme.colorScheme.secondaryContainer
-                                else -> MaterialTheme.colorScheme.surface
-                            }
-                        ),
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
-                        shape = RoundedCornerShape(14.dp)
-                    ) {
-                        Text(option, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start, style = MaterialTheme.typography.titleMedium)
-                    }
+                    ModernChoiceRow(text = option, selected = selected, enabled = answerResult == null, onClick = { selectedOption = option }, label = ('A' + options.indexOf(option)).toString(), feedback = when { answerResult != null && correctOption -> true; answerResult == false && selected -> false; else -> null })
                 }
             } else if (mode == QuizPlayMode.SENTENCE_ORDER) {
                 val compactFontSize = when {
@@ -1546,7 +1443,8 @@ private fun ThreeStageVocabularyGame(
                         val isSelected = selectedOption == option
                         val isCorrectOption = option.equals(currentCard.word, ignoreCase = true)
                         val checked = answeredCorrectly != null
-                        OutlinedButton(
+                        ModernChoiceRow(text = option, label = ('A' + optionIndex).toString(), selected = isSelected,
+                            feedback = when { checked && isCorrectOption -> true; checked && isSelected -> false; else -> null },
                             onClick = {
                                 selectedOption = option
                                 if (checked) {
@@ -1559,37 +1457,7 @@ private fun ThreeStageVocabularyGame(
                                         }
                                     }
                                 }
-                            },
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                containerColor = when {
-                                    checked && isCorrectOption ->
-                                        MaterialTheme.colorScheme.primaryContainer
-                                    checked && isSelected && !isCorrectOption ->
-                                        MaterialTheme.colorScheme.errorContainer
-                                    isSelected -> MaterialTheme.colorScheme.secondaryContainer
-                                    else -> MaterialTheme.colorScheme.surface
-                                },
-                                contentColor = when {
-                                    checked && isCorrectOption ->
-                                        MaterialTheme.colorScheme.onPrimaryContainer
-                                    checked && isSelected && !isCorrectOption ->
-                                        MaterialTheme.colorScheme.onErrorContainer
-                                    isSelected -> MaterialTheme.colorScheme.onSecondaryContainer
-                                    else -> MaterialTheme.colorScheme.onSurface
-                                }
-                            ),
-                            shape = RoundedCornerShape(14.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(52.dp)
-                        ) {
-                            Text(
-                                "${('A'.code + optionIndex).toChar()}  $option",
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.fillMaxWidth(),
-                                textAlign = TextAlign.Start
-                            )
-                        }
+                            })
                     }
                 }
             } else {

@@ -1,4 +1,10 @@
 package com.example.ui.screens
+import com.example.ui.components.ModernButton as Button
+import com.example.ui.components.ModernOutlinedButton as OutlinedButton
+import com.example.ui.components.ModernCard as Card
+import com.example.ui.components.ModernListRow
+import com.example.ui.components.ModernTextField as OutlinedTextField
+import com.example.ui.components.ModernAlertDialog as AlertDialog
 
 import android.app.Activity
 import android.content.Context
@@ -176,18 +182,7 @@ fun ReadingLibraryScreen(
         item { Text("我的文章", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
         if (articleMessages.isEmpty()) item { CalmEmptyState(Icons.Default.Article, "還沒有文章", "可由單字資料夾產生文章，或匯入自己的內容。") }
         itemsIndexed(articleMessages, key = { _, item -> item.id }) { index, message ->
-            Card(
-                onClick = { onOpenArticle(message) },
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                    if (index == 0) Text("最近閱讀", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                    Text(articleTitle(message), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text(message.content.replace('\n', ' '), maxLines = 3, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(dateText(message.createdAt), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                }
-            }
+ModernListRow(articleTitle(message), "${dateText(message.createdAt)} · " + message.content.replace('\n', ' ').take(100), Icons.Default.Article, { onOpenArticle(message) })
         }
     }
 }
@@ -217,22 +212,7 @@ fun WritingLibraryScreen(
         item { Text("作文紀錄", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
         if (records.isEmpty()) item { CalmEmptyState(Icons.Default.EditNote, "還沒有作文", "新增作文或拍照匯入，AI 批改前會先讓你確認辨識文字。") }
         itemsIndexed(records, key = { _, item -> item.id }) { index, record ->
-            Card(
-                onClick = { onOpen(record) },
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (index == 0) Text("最近修改", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                    Text(record.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text(record.originalText.replace('\n', ' '), maxLines = 2, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(record.course, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                        Text("${issueCount(record)} 項批改", style = MaterialTheme.typography.labelMedium)
-                        Text(dateText(record.updatedAt), style = MaterialTheme.typography.labelMedium)
-                    }
-                }
-            }
+ModernListRow(record.title, "${record.course} · ${issueCount(record)} 項批改 · ${dateText(record.updatedAt)}", Icons.Default.EditNote, { onOpen(record) })
         }
     }
 }

@@ -1,4 +1,12 @@
 package com.example.ui.screens
+import androidx.compose.foundation.layout.PaddingValues
+import com.example.ui.components.ModernTonalButton as FilledTonalButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material.icons.filled.DocumentScanner
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.CollectionsBookmark
+import com.example.ui.components.ModernListRow
+import com.example.ui.components.CalmSectionHeader
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
@@ -33,10 +41,10 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Style
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
+import com.example.ui.components.ModernAlertDialog as AlertDialog
+import com.example.ui.components.ModernButton as Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
+import com.example.ui.components.ModernCard as Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -290,296 +298,52 @@ fun DashboardScreen(
         modifier = modifier
     ) { innerPadding ->
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(top = if (showTopBar) 6.dp else 0.dp)
-                .padding(horizontal = 16.dp),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 12.dp, bottom = 120.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier = Modifier.fillMaxSize().padding(innerPadding),
+            contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 120.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // Keep today's status, goal and streak in one calm summary card.
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(9.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("今日學習", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            Text("連續 ${streak.current} 天", style = MaterialTheme.typography.labelLarge)
+                Text("繼續今天的學習", style = MaterialTheme.typography.headlineSmall)
+                Text("每天一點，讓英文成為習慣。", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            item {
+                Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surface) {
+                    Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("今日進度", style = MaterialTheme.typography.titleMedium)
+                            Text("連續 ${streak.current} 天", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        Text(
-                            if (progress.isGoalReached) "今日目標已完成"
-                            else if (dueCount > 0) "待複習 $dueCount 張"
-                            else "還差 ${progress.remainingCards} 張完成目標",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                        LinearProgressIndicator(
-                            progress = { progress.goalFraction },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Text(
-                            "${progress.completedCards} / ${progress.goalCards} 張 · ${progress.dailyXp} XP",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
+                        Text("${progress.completedCards} / ${progress.goalCards}", style = MaterialTheme.typography.headlineLarge)
+                        LinearProgressIndicator(progress = { progress.goalFraction }, modifier = Modifier.fillMaxWidth().height(5.dp))
+                        Text("待複習 $dueCount 張 · ${progress.dailyXp} XP", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Button(onClick = { pendingFolderAction = "REVIEW" }, enabled = totalCount > 0, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth().height(50.dp).testTag("start_review_button")) { Text("開始複習") }
                     }
                 }
             }
-
-            // Primary SRS Review Action Button
             item {
-                Button(
-                    onClick = { pendingFolderAction = "REVIEW" },
-                    enabled = totalCount > 0,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary
-                    ),
-                    shape = RoundedCornerShape(20.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(54.dp)
-                        .testTag("start_review_button")
-                ) {
-                    Text(
-                        text = if (dueCount > 0) "開始複習（$dueCount）" else "開始學習",
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.Bold
-                        )
-                    )
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    FilledTonalButton(onClick = onOpenAddCard, modifier = Modifier.weight(1f).height(50.dp), shape = RoundedCornerShape(16.dp)) { Icon(Icons.Default.Add, null); Spacer(Modifier.width(6.dp)); Text("新增單字") }
+                    FilledTonalButton(onClick = onOpenPhotoOcr, modifier = Modifier.weight(1f).height(50.dp).testTag("tool_photo_ocr"), shape = RoundedCornerShape(16.dp)) { Icon(Icons.Default.DocumentScanner, null); Spacer(Modifier.width(6.dp)); Text("掃描匯入") }
                 }
             }
-
+            item { ModernListRow("匯入單字集", "連結、檔案或貼上文字", Icons.Default.Download, onOpenExternalImport, modifier = Modifier.testTag("tool_external_import")) }
+            item { ModernListRow("測驗", "選擇資料夾，練習記憶與應用", Icons.Default.Extension, { pendingFolderAction = "GAME" }, modifier = Modifier.testTag("tool_quiz_games")) }
+            item { CalmSectionHeader("我的單字庫", action = { IconButton(onClick = { showAddFolderDialog = true }, modifier = Modifier.testTag("dashboard_add_folder_button")) { Icon(Icons.Default.Add, "新增資料夾") } }) }
             item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    QuickToolCard(
-                        title = "掃描文件",
-                        color = MaterialTheme.colorScheme.primary,
-                        onClick = onOpenPhotoOcr,
-                        modifier = Modifier.weight(1f).testTag("tool_photo_ocr")
-                    )
-
-                    QuickToolCard(
-                        title = "測驗",
-                        color = MaterialTheme.colorScheme.tertiary,
-                        onClick = { pendingFolderAction = "GAME" },
-                        enabled = totalCount > 0,
-                        modifier = Modifier.weight(1f).testTag("tool_quiz_games")
-                    )
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    item { FilterChip(selected = selectedCourseFilter == null, onClick = { selectedCourseFilter = null }, label = { Text("全部") }) }
+                    items(courses) { course -> FilterChip(selected = selectedCourseFilter == course, onClick = { selectedCourseFilter = course }, label = { Text(course) }) }
                 }
             }
-            item {
-                QuickToolCard(
-                    title = "匯入單字集",
-                    color = MaterialTheme.colorScheme.secondary,
-                    onClick = onOpenExternalImport,
-                    modifier = Modifier.fillMaxWidth().testTag("tool_external_import")
-                )
+            item { ModernListRow("所有單字", "$totalCount 張 · 已精通 $masteredCount 張", Icons.Default.CollectionsBookmark, { onSelectDeck(null); onOpenCardList() }) }
+            items(decks.filter { selectedCourseFilter == null || it.category == selectedCourseFilter }) { deck ->
+                ModernListRow(deck.name, "${deck.category} · ${allCards.count { it.deckId == deck.id }} 張", Icons.Default.Folder, { onSelectDeck(deck.id); onOpenCardList() })
             }
-
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("學習工具", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        CompactLearningTool(
-                            title = "文章閱讀",
-                            icon = Icons.AutoMirrored.Filled.MenuBook,
-                            enabled = totalCount > 0,
-                            onClick = { pendingFolderAction = "READING" },
-                            modifier = Modifier.weight(1f)
-                        )
-                        CompactLearningTool(
-                            title = "學習日曆",
-                            icon = Icons.Default.CalendarMonth,
-                            onClick = onOpenStudyCalendar,
-                            modifier = Modifier.weight(1f)
-                        )
-                        CompactLearningTool(
-                            title = "資料檢查",
-                            icon = Icons.AutoMirrored.Filled.FactCheck,
-                            enabled = totalCount > 0,
-                            onClick = onOpenQualityCheck,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-            }
-
-            // Course & Folder Management Section
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text(
-                                text = "我的單字庫",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                            )
-                        }
-
-                        IconButton(
-                            onClick = { showAddFolderDialog = true },
-                            modifier = Modifier
-                                .size(40.dp)
-                                .testTag("dashboard_add_folder_button")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = "新增資料夾"
-                            )
-                        }
-                    }
-
-                    // Course Chips Row
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        item {
-                            Surface(
-                                onClick = { selectedCourseFilter = null },
-                                shape = RoundedCornerShape(12.dp),
-                                color = if (selectedCourseFilter == null) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
-                                border = BorderStroke(
-                                    1.dp,
-                                    if (selectedCourseFilter == null) MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
-                                    else MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)
-                                ),
-                                contentColor = if (selectedCourseFilter == null) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
-                            ) {
-                                Text(
-                                    text = "全部",
-                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
-                                )
-                            }
-                        }
-
-                        items(courses) { course ->
-                            val isSelected = selectedCourseFilter == course
-                            Surface(
-                                onClick = { selectedCourseFilter = course },
-                                shape = RoundedCornerShape(12.dp),
-                                color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
-                                border = BorderStroke(
-                                    1.dp,
-                                    if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
-                                    else MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)
-                                ),
-                                contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
-                            ) {
-                                Text(
-                                    text = course,
-                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
-                                )
-                            }
-                        }
-                    }
-
-                    // Folder Cards Display
-                    val filteredDecks = if (selectedCourseFilter == null) decks else decks.filter { it.category == selectedCourseFilter }
-
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        item {
-                            DeckChip(
-                                title = "所有單字",
-                                count = totalCount,
-                                isSelected = selectedDeckId == null,
-                                onClick = {
-                                    onSelectDeck(null)
-                                    onOpenCardList()
-                                }
-                            )
-                        }
-
-                        items(filteredDecks) { deck ->
-                            val isSelected = selectedDeckId == deck.id
-                            val deckColor = try {
-                                Color(android.graphics.Color.parseColor(deck.colorHex))
-                            } catch (e: Exception) {
-                                MaterialTheme.colorScheme.primary
-                            }
-
-                            Card(
-                                onClick = {
-                                    onSelectDeck(deck.id)
-                                    onOpenCardList()
-                                },
-                                shape = RoundedCornerShape(16.dp),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = if (isSelected) {
-                                        MaterialTheme.colorScheme.primaryContainer
-                                    } else {
-                                        deckColor.copy(alpha = 0.12f)
-                                    }
-                                ),
-                                modifier = Modifier
-                                    .width(180.dp)
-                                    .heightIn(min = 95.dp)
-                            ) {
-                                Column(
-                                    modifier = Modifier
-                                        .padding(12.dp)
-                                        .fillMaxSize(),
-                                    verticalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(
-                                        text = deck.category,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else deckColor,
-                                        fontWeight = FontWeight.Bold
-                                    )
-
-                                    Text(
-                                        text = deck.name,
-                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                                        color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-                                        maxLines = 1
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Statistics Chart & Progress Section
-            item {
-                StatisticsChart(
-                    totalCards = totalCount,
-                    masteredCards = masteredCount,
-                    dueCards = dueCount,
-                    logs = logs
-                )
-            }
-
-            item {
-                Spacer(modifier = Modifier.height(40.dp))
-            }
+            item { CalmSectionHeader("學習工具") }
+            item { ModernListRow("文章閱讀", "用熟悉的單字練習閱讀", Icons.AutoMirrored.Filled.MenuBook, { pendingFolderAction = "READING" }) }
+            item { ModernListRow("學習日曆", "檢視每日學習紀錄", Icons.Default.CalendarMonth, onOpenStudyCalendar) }
+            item { ModernListRow("資料檢查", "補齊缺漏與修正資料", Icons.AutoMirrored.Filled.FactCheck, onOpenQualityCheck) }
+            item { StatisticsChart(totalCards = totalCount, masteredCards = masteredCount, dueCards = dueCount, logs = logs) }
         }
     }
 }

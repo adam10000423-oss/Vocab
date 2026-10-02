@@ -1,4 +1,5 @@
 package com.example.ui.screens
+import com.example.ui.components.ModernListRow
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -15,8 +16,8 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
+import com.example.ui.components.ModernButton as Button
+import com.example.ui.components.ModernCard as Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -131,24 +132,7 @@ fun VocabularyQualityScreen(
                 }
             } else {
                 items(findings) { finding ->
-                    Card(shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
-                        Row(
-                            Modifier.padding(14.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = MaterialTheme.colorScheme.error)
-                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                Text(finding.title, fontWeight = FontWeight.Bold)
-                                Text(finding.detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            finding.card?.let { card ->
-                                IconButton(onClick = { onEditCard(card) }) {
-                                    Icon(Icons.Default.Edit, contentDescription = "編輯 ${card.word}")
-                                }
-                            }
-                        }
-                    }
+                    ModernListRow(finding.title, finding.detail, Icons.Default.ErrorOutline, { finding.card?.let(onEditCard) }, trailing = { finding.card?.let { card -> IconButton(onClick = { onEditCard(card) }) { Icon(Icons.Default.Edit, "編輯 ${card.word}") } } })
                 }
             }
         }

@@ -1,4 +1,5 @@
 package com.example.ui.screens
+import com.example.ui.components.ModernListRow
 
 import android.net.Uri
 import android.app.Activity
@@ -58,10 +59,10 @@ import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
+import com.example.ui.components.ModernAlertDialog as AlertDialog
+import com.example.ui.components.ModernButton as Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
+import com.example.ui.components.ModernCard as Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Checkbox
@@ -69,8 +70,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
+import com.example.ui.components.ModernOutlinedButton as OutlinedButton
+import com.example.ui.components.ModernTextField as OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -771,41 +772,17 @@ private fun AssistantWelcome(
     onSuggestion: (String) -> Unit,
     onOpenSettings: () -> Unit
 ) {
-    Card(
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(32.dp))
-            Text("想整理或練習哪些單字？", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Text(
-                "AI 會先顯示正在讀取的資料與預計操作；修改內容前一定會讓你確認。",
-                style = MaterialTheme.typography.bodyMedium
-            )
-            if (!apiConfigured) {
-                Button(onClick = onOpenSettings) { Text("設定 AI API") }
-            } else {
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    listOf(
-                        "依照字母排序這個資料夾",
-                        "找出容易混淆的單字",
-                        "根據這個資料夾寫一篇文章",
-                        "製作五題互動測驗"
-                    ).forEach { suggestion ->
-                        OutlinedButton(onClick = { onSuggestion(suggestion) }) {
-                            Text(suggestion, style = MaterialTheme.typography.labelMedium)
-                        }
-                    }
-                }
-            }
-        }
+    Column(Modifier.fillMaxWidth().padding(vertical = 24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Icon(Icons.Default.AutoAwesome, null, Modifier.size(30.dp), tint = MaterialTheme.colorScheme.primary)
+        Text("一起整理與練習", style = MaterialTheme.typography.headlineSmall)
+        Text("選好可讀取的資料夾，告訴 AI 你想做什麼。任何修改都會先讓你確認。", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (!apiConfigured) Button(onClick = onOpenSettings) { Text("設定 AI API") }
+        else listOf(
+            "整理資料" to "依照字母排序這個資料夾",
+            "比較容易混淆的單字" to "找出容易混淆的單字",
+            "建立閱讀文章" to "根據這個資料夾寫一篇文章",
+            "練習互動測驗" to "製作五題互動測驗"
+        ).forEach { (title, prompt) -> ModernListRow(title, icon = Icons.Default.AutoAwesome, onClick = { onSuggestion(prompt) }) }
     }
 }
 
@@ -1010,12 +987,7 @@ private fun AssistantMessageBubble(
         horizontalArrangement = if (user) Arrangement.End else Arrangement.Start
     ) {
         Surface(
-            shape = RoundedCornerShape(
-                topStart = 18.dp,
-                topEnd = 18.dp,
-                bottomStart = if (user) 18.dp else 5.dp,
-                bottomEnd = if (user) 5.dp else 18.dp
-            ),
+            shape = RoundedCornerShape(20.dp),
             color = if (user) MaterialTheme.colorScheme.primaryContainer
             else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
             contentColor = if (user) MaterialTheme.colorScheme.onPrimaryContainer

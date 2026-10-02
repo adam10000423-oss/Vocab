@@ -34,17 +34,17 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Save
-import androidx.compose.material3.Button
-import androidx.compose.material3.AlertDialog
+import com.example.ui.components.ModernButton as Button
+import com.example.ui.components.ModernAlertDialog as AlertDialog
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
+import com.example.ui.components.ModernCard as Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import com.example.ui.components.ModernTextField as OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -633,135 +633,24 @@ private fun CompactCardEditItem(
         }
     }
 
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag("compact_card_edit_item_$index")
-    ) {
-        Column(
-            modifier = Modifier.padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            // Keep the primary input wide; compact actions remain icons.
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Surface(
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primary
-                ) {
-                    Text(
-                        text = "#$index",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
+    Card(modifier = Modifier.fillMaxWidth().testTag("compact_card_edit_item_$index")) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("單字卡 #$index", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                IconButton(onClick = onFetchAiDetails, enabled = !cardState.isAiLoading && cardState.word.isNotBlank()) {
+                    if (cardState.isAiLoading) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                    else Icon(Icons.Default.AutoAwesome, "AI 補齊", tint = MaterialTheme.colorScheme.primary)
                 }
-
-                // Word Input
-                OutlinedTextField(
-                    value = cardState.word,
-                    onValueChange = { cardState.word = it },
-                    label = { Text("英文單字") },
-                    singleLine = true,
-                    modifier = Modifier
-                        .weight(1f)
-                        .focusRequester(focusRequester)
-                        .testTag("compact_word_input_$index")
-                )
-
-                IconButton(
-                    onClick = onFetchAiDetails,
-                    enabled = !cardState.isAiLoading && cardState.word.isNotBlank(),
-                    modifier = Modifier.size(44.dp)
-                ) {
-                    if (cardState.isAiLoading) {
-                        CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
-                    } else {
-                        Icon(
-                            Icons.Default.AutoAwesome,
-                        contentDescription = "AI 補齊",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
-
-                // Delete Button
-                IconButton(
-                    onClick = onDelete,
-                    modifier = Modifier.size(36.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "刪除",
-                        tint = MaterialTheme.colorScheme.error
-                    )
-                }
+                IconButton(onClick = onDelete) { Icon(Icons.Default.Delete, "刪除", tint = MaterialTheme.colorScheme.error) }
             }
-
-            // Pronunciation belongs below the word so actions never squeeze it.
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                OutlinedTextField(
-                    value = cardState.partOfSpeech,
-                    onValueChange = { cardState.partOfSpeech = it },
-                    label = { Text("詞性") },
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.weight(0.75f)
-                )
-
-                OutlinedTextField(
-                    value = cardState.phonetic,
-                    onValueChange = { cardState.phonetic = it },
-                    label = { Text("音標") },
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.weight(1.25f)
-                )
+            OutlinedTextField(cardState.word, { cardState.word = it }, label = { Text("英文單字") }, singleLine = true, modifier = Modifier.fillMaxWidth().focusRequester(focusRequester).testTag("compact_word_input_$index"))
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(cardState.partOfSpeech, { cardState.partOfSpeech = it }, label = { Text("詞性") }, singleLine = true, modifier = Modifier.weight(1f))
+                OutlinedTextField(cardState.phonetic, { cardState.phonetic = it }, label = { Text("音標") }, singleLine = true, modifier = Modifier.weight(1.5f))
             }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                OutlinedTextField(
-                    value = cardState.definition,
-                    onValueChange = { cardState.definition = it },
-                    label = { Text("繁體中文定義") },
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag("compact_def_input_$index")
-                )
-
-                OutlinedTextField(
-                    value = cardState.exampleSentence,
-                    onValueChange = { cardState.exampleSentence = it },
-                    label = { Text("英文例句") },
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag("compact_sentence_input_$index")
-                )
-            }
-
-            OutlinedTextField(
-                value = cardState.exampleTranslation,
-                onValueChange = { cardState.exampleTranslation = it },
-                label = { Text("中文例句") },
-                singleLine = true,
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth()
-            )
+            OutlinedTextField(cardState.definition, { cardState.definition = it }, label = { Text("繁體中文定義") }, minLines = 2, modifier = Modifier.fillMaxWidth().testTag("compact_def_input_$index"))
+            OutlinedTextField(cardState.exampleSentence, { cardState.exampleSentence = it }, label = { Text("英文例句") }, minLines = 2, modifier = Modifier.fillMaxWidth().testTag("compact_sentence_input_$index"))
+            OutlinedTextField(cardState.exampleTranslation, { cardState.exampleTranslation = it }, label = { Text("中文翻譯") }, minLines = 2, modifier = Modifier.fillMaxWidth())
         }
     }
 }

@@ -1,4 +1,5 @@
 package com.example.ui.screens
+import com.example.ui.components.ModernCollectionRow
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -25,7 +26,7 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Style
-import androidx.compose.material3.Button
+import com.example.ui.components.ModernButton as Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -192,106 +193,7 @@ fun StudyHubScreen(
                         MaterialTheme.colorScheme.primary
                     }
 
-                    Card(
-                        shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surface
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(14.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(14.dp)
-                                            .clip(CircleShape)
-                                            .background(deckColor)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = deck.name,
-                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-
-                                Surface(
-                                    shape = RoundedCornerShape(10.dp),
-                                    color = if (dueCount > 0) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer
-                                ) {
-                                    Text(
-                                        text = when {
-                                            totalCards == 0 -> "沒有單字"
-                                            dueCount > 0 -> "待複習 $dueCount"
-                                            masteredCount == totalCards -> "已完成"
-                                            else -> "無到期"
-                                        },
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                        color = if (dueCount > 0) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
-                                    )
-                                }
-                            }
-
-                            // Progress indicator bar
-                            Column {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text("精通進度", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-                                    Text("${(progressRatio * 100).toInt()}% ($masteredCount/$totalCards)", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold))
-                                }
-                                Spacer(modifier = Modifier.height(4.dp))
-                                LinearProgressIndicator(
-                                    progress = { progressRatio },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(8.dp)
-                                        .clip(RoundedCornerShape(4.dp)),
-                                    color = deckColor,
-                                    trackColor = MaterialTheme.colorScheme.surface
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.height(2.dp))
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                OutlinedButton(
-                                    onClick = { onManageDeck(deck.id) },
-                                    shape = RoundedCornerShape(12.dp),
-                                    modifier = Modifier.weight(1f)
-                                ) { Text("管理", fontWeight = FontWeight.Bold) }
-                                Button(
-                                    onClick = { onStartReviewForDeck(deck.id) },
-                                    enabled = totalCards > 0,
-                                    shape = RoundedCornerShape(12.dp),
-                                    modifier = Modifier.weight(1f).testTag("start_review_deck_${deck.id}")
-                                ) { Text("學習", fontWeight = FontWeight.Bold) }
-                                OutlinedButton(
-                                    onClick = { onQuizDeck(deck.id) },
-                                    enabled = totalCards > 0,
-                                    shape = RoundedCornerShape(12.dp),
-                                    modifier = Modifier.weight(1f)
-                                ) { Text("測驗", fontWeight = FontWeight.Bold) }
-                            }
-                        }
-                    }
+ModernCollectionRow(title = deck.name, subtitle = deck.category, count = totalCards, due = dueCount, progress = progressRatio, mode = "learn", onManage = { onManageDeck(deck.id) }, onLearn = { onStartReviewForDeck(deck.id) }, onQuiz = { onQuizDeck(deck.id) }, primaryActionModifier = Modifier.testTag("start_review_deck_${deck.id}"))
                 }
             }
 

@@ -1,4 +1,8 @@
 package com.example.ui.screens
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material.icons.filled.MoreVert
+import com.example.ui.components.ModernCollectionRow
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -29,18 +33,18 @@ import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
+import com.example.ui.components.ModernAlertDialog as AlertDialog
+import com.example.ui.components.ModernButton as Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
+import com.example.ui.components.ModernCard as Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
+import com.example.ui.components.ModernOutlinedButton as OutlinedButton
+import com.example.ui.components.ModernTextField as OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -222,51 +226,7 @@ private fun GrammarManageLibraryCard(
     onQuiz: () -> Unit,
     dragModifier: Modifier
 ) {
-    Card(
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (dragging) .8f else .5f)),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(16.dp).clip(CircleShape).background(color))
-                    Spacer(Modifier.width(8.dp))
-                    Column {
-                        Text(library.name, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(library.course, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(0.dp)) {
-                    IconButton(onClick = {}, modifier = dragModifier.size(36.dp)) {
-                        Icon(Icons.Default.DragHandle, "拖曳排序", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
-                    }
-                    IconButton(onClick = onEdit, modifier = Modifier.size(36.dp)) {
-                        Icon(Icons.Default.Edit, "編輯文法庫", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
-                    }
-                    IconButton(onClick = onDelete, modifier = Modifier.size(36.dp)) {
-                        Icon(Icons.Default.Delete, "刪除文法庫", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
-                    }
-                }
-            }
-            if (library.description.isNotBlank()) {
-                Text(library.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            }
-            Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surface).padding(horizontal = 12.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceAround
-            ) {
-                Stat("總文法", total)
-                Stat("已精通", mastered)
-                Stat("待複習", due)
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                LibraryAction("管理", true, true, onManage, Modifier.weight(1f))
-                LibraryAction("學習", false, total > 0, onLearn, Modifier.weight(1f))
-                LibraryAction("測驗", false, total > 0, onQuiz, Modifier.weight(1f))
-            }
-        }
-    }
+    ModernCollectionRow(library.name, library.course, total, due, if (total > 0) mastered.toFloat() / total else 0f, grammar = true, onManage = onManage, onLearn = onLearn, onQuiz = onQuiz, onEdit = onEdit, onDelete = onDelete, dragModifier = dragModifier)
 }
 
 @Composable
@@ -280,54 +240,7 @@ private fun GrammarLearningLibraryCard(
     onLearn: () -> Unit,
     onQuiz: () -> Unit
 ) {
-    val progress = if (total > 0) mastered.toFloat() / total else 0f
-    Card(
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(14.dp).clip(CircleShape).background(color))
-                    Spacer(Modifier.width(8.dp))
-                    Text(library.name, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                Surface(shape = RoundedCornerShape(10.dp), color = if (due > 0) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer) {
-                    Text(
-                        when {
-                            total == 0 -> "沒有文法"
-                            due > 0 -> "待複習 $due"
-                            mastered == total -> "已完成"
-                            else -> "無到期"
-                        },
-                        Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        color = if (due > 0) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
-                    )
-                }
-            }
-            Column {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("精通進度", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-                    Text("${(progress * 100).toInt()}% ($mastered/$total)", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold))
-                }
-                Spacer(Modifier.height(4.dp))
-                LinearProgressIndicator(
-                    progress = { progress },
-                    modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
-                    color = color,
-                    trackColor = MaterialTheme.colorScheme.surface
-                )
-            }
-            Spacer(Modifier.height(2.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                LibraryAction("管理", false, true, onManage, Modifier.weight(1f))
-                LibraryAction("學習", true, total > 0, onLearn, Modifier.weight(1f))
-                LibraryAction("測驗", false, total > 0, onQuiz, Modifier.weight(1f))
-            }
-        }
-    }
+    ModernCollectionRow(library.name, library.course, total, due, if (total > 0) mastered.toFloat() / total else 0f, mode = "learn", grammar = true, onManage = onManage, onLearn = onLearn, onQuiz = onQuiz)
 }
 
 @Composable
@@ -339,32 +252,7 @@ private fun GrammarQuizLibraryCard(
     onLearn: () -> Unit,
     onQuiz: () -> Unit
 ) {
-    Card(
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(14.dp).clip(CircleShape).background(color))
-                    Spacer(Modifier.width(8.dp))
-                    Column {
-                        Text(library.name, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(library.course, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                    }
-                }
-                Surface(shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.secondaryContainer) {
-                    Text("$total 個", Modifier.padding(horizontal = 10.dp, vertical = 4.dp), style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSecondaryContainer)
-                }
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                LibraryAction("管理", false, true, onManage, Modifier.weight(1f))
-                LibraryAction("學習", false, total > 0, onLearn, Modifier.weight(1f))
-                LibraryAction("測驗", true, total > 0, onQuiz, Modifier.weight(1.2f))
-            }
-        }
-    }
+    ModernCollectionRow(library.name, library.course, total, mode = "quiz", grammar = true, onManage = onManage, onLearn = onLearn, onQuiz = onQuiz)
 }
 
 @Composable
@@ -451,19 +339,29 @@ fun GrammarLibraryManageScreen(
             itemsIndexed(noteIds, key = { _, id -> id }) { _, id ->
                 val note = filtered.firstOrNull { it.id == id } ?: return@itemsIndexed
                 ReorderableItem(reorderState, key = id) { dragging ->
-                    Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (dragging) .8f else .55f))) {
-                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    var noteMenu by remember(note.id) { mutableStateOf(false) }
+                    Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surface) {
+                        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
-                                    Text(note.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                    Text(note.structure.ifBlank { note.summary }, maxLines = 2, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(note.title, style = MaterialTheme.typography.titleLarge)
+                                    Text("${note.category} · ${note.level}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
-                                Icon(Icons.Default.DragHandle, "拖曳排序", Modifier.draggableHandle())
-                                IconButton(onClick = { onEdit(note) }) { Icon(Icons.Default.Edit, "編輯文法") }
-                                IconButton(onClick = { pendingDelete = note }) { Icon(Icons.Default.Delete, "刪除文法", tint = MaterialTheme.colorScheme.error) }
+                                Icon(Icons.Default.DragHandle, "拖曳排序", Modifier.draggableHandle().size(32.dp))
+                                Box {
+                                    IconButton(onClick = { noteMenu = true }) { Icon(Icons.Default.MoreVert, "文法操作") }
+                                    DropdownMenu(expanded = noteMenu, onDismissRequest = { noteMenu = false }) {
+                                        DropdownMenuItem(text = { Text("編輯") }, onClick = { noteMenu = false; onEdit(note) })
+                                        DropdownMenuItem(text = { Text("刪除", color = MaterialTheme.colorScheme.error) }, onClick = { noteMenu = false; pendingDelete = note })
+                                    }
+                                }
                             }
-                            if (note.exampleSentence.isNotBlank()) Text(note.exampleSentence, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            LinearProgressIndicator(progress = { note.masteryPercent.coerceIn(0, 100) / 100f }, modifier = Modifier.fillMaxWidth().height(7.dp).clip(RoundedCornerShape(4.dp)))
+                            Text(note.structure.ifBlank { note.summary }, style = MaterialTheme.typography.bodyLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            if (note.exampleSentence.isNotBlank()) Text(note.exampleSentence, maxLines = 2, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                LinearProgressIndicator(progress = { note.masteryPercent.coerceIn(0, 100) / 100f }, modifier = Modifier.weight(1f).height(4.dp))
+                                Text("${note.masteryPercent}%", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
                         }
                     }
                 }

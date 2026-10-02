@@ -1,4 +1,6 @@
 package com.example.ui.screens
+import com.example.ui.components.ModernCard as Card
+import com.example.ui.components.ModernTextField as OutlinedTextField
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn

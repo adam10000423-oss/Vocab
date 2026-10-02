@@ -42,9 +42,9 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Restore
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
+import com.example.ui.components.ModernAlertDialog as AlertDialog
+import com.example.ui.components.ModernButton as Button
+import com.example.ui.components.ModernCard as Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -54,8 +54,8 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedButton
+import com.example.ui.components.ModernTextField as OutlinedTextField
+import com.example.ui.components.ModernOutlinedButton as OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Slider
@@ -388,13 +388,12 @@ fun SettingsScreen(
             }
             if (settingsPage == "外觀") item {
                 SettingsSection("主題") {
-                    SettingDropdown(
-                        label = "顯示模式",
-                        value = settings.themeMode,
-                        options = listOf("SYSTEM", "LIGHT", "DARK"),
-                        optionText = { when (it) { "LIGHT" -> "亮色"; "DARK" -> "暗色"; else -> "跟隨系統" } },
-                        onSelected = onThemeChange
-                    )
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf("LIGHT" to "亮色", "DARK" to "暗色", "SYSTEM" to "系統").forEach { (value, label) ->
+                            FilterChip(selected = settings.themeMode == value, onClick = { onThemeChange(value) }, label = { Text(label) }, modifier = Modifier.weight(1f))
+                        }
+                    }
+                    Text("畫面與文字顏色隨主題統一調整。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             if (settingsPage == "學習") item {

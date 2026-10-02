@@ -20,10 +20,11 @@ private val AppShapes = Shapes(
 
 private val LightColors = lightColorScheme(
     primary = Color(0xFF245FE5), onPrimary = Color.White,
-    primaryContainer = Color(0xFFDCE6FF), onPrimaryContainer = Color(0xFF0D2F73),
+    primaryContainer = Color(0xFFE5EDFF), onPrimaryContainer = Color(0xFF163974),
     secondary = Color(0xFF586174), onSecondary = Color.White,
     secondaryContainer = Color(0xFFE1E5EE), onSecondaryContainer = Color(0xFF202632),
-    tertiary = Color(0xFF496783), onTertiary = Color.White,
+    tertiary = Color(0xFF586174), onTertiary = Color.White,
+    tertiaryContainer = Color(0xFFEDF0F4), onTertiaryContainer = Color(0xFF202632),
     background = Color(0xFFF6F7F9), onBackground = Color(0xFF15171B),
     surface = Color.White, onSurface = Color(0xFF15171B),
     surfaceContainerLowest = Color.White,
@@ -39,11 +40,12 @@ private val LightColors = lightColorScheme(
 )
 
 private val DarkColors = darkColorScheme(
-    primary = Color(0xFF9BB7FF), onPrimary = Color(0xFF092C6F),
-    primaryContainer = Color(0xFF23447F), onPrimaryContainer = Color(0xFFDCE6FF),
+    primary = Color(0xFF82AAFF), onPrimary = Color(0xFF092C6F),
+    primaryContainer = Color(0xFF253554), onPrimaryContainer = Color(0xFFDCE6FF),
     secondary = Color(0xFFBCC4D6), onSecondary = Color(0xFF27303F),
     secondaryContainer = Color(0xFF343B49), onSecondaryContainer = Color(0xFFE0E5F0),
-    tertiary = Color(0xFFB1CAE6), onTertiary = Color(0xFF1C344A),
+    tertiary = Color(0xFFBCC4D6), onTertiary = Color(0xFF27303F),
+    tertiaryContainer = Color(0xFF262A32), onTertiaryContainer = Color(0xFFE0E5F0),
     background = Color(0xFF0F1115), onBackground = Color(0xFFF2F4F7),
     surface = Color(0xFF191C22), onSurface = Color(0xFFF2F4F7),
     surfaceContainerLowest = Color(0xFF0B0D11),

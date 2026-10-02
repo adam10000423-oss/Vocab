@@ -1,5 +1,5 @@
 package com.example.ui.screens
-
+import androidx.compose.material3.FilterChip
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -24,17 +24,17 @@ import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
+import com.example.ui.components.ModernAlertDialog as AlertDialog
+import com.example.ui.components.ModernButton as Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
+import com.example.ui.components.ModernCard as Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import com.example.ui.components.ModernOutlinedButton as OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -292,6 +292,13 @@ fun InteractiveReadingScreen(
                     Text("點選文章中的重點單字可翻卡、聽發音或練習。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 item {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(selected = !showTranslations, onClick = { showTranslations = false }, label = { Text("文章") })
+                        FilterChip(selected = showTranslations, onClick = { showTranslations = true }, label = { Text("逐句翻譯") })
+                        FilterChip(selected = false, enabled = content.questions.isNotEmpty(), onClick = { quizMode = true }, label = { Text("測驗 ${content.questions.size}") })
+                    }
+                }
+                if (!showTranslations) item {
                     val highlighted = highlightedArticle(
                         content.article,
                         cards,

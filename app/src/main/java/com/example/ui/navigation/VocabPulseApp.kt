@@ -238,7 +238,7 @@ fun VocabApp(
     }
 
     if (showSwitchConfirmDialog) {
-        androidx.compose.material3.AlertDialog(
+        com.example.ui.components.ModernAlertDialog(
             onDismissRequest = { showSwitchConfirmDialog = false },
             title = { androidx.compose.material3.Text("切換產品世界？") },
             text = { androidx.compose.material3.Text("您目前的編輯或測驗進度將會取消，確定要切換嗎？") },
@@ -259,7 +259,7 @@ fun VocabApp(
     }
 
     if (generatingAiTopic != null) {
-        androidx.compose.material3.AlertDialog(
+        com.example.ui.components.ModernAlertDialog(
             onDismissRequest = {},
             title = { androidx.compose.material3.Text("AI 正在生成特訓中…") },
             text = {

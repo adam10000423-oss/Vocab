@@ -1,4 +1,6 @@
 package com.example.ui.screens
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.ui.text.style.TextOverflow
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
@@ -43,10 +45,10 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.outlined.StarBorder
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
+import com.example.ui.components.ModernAlertDialog as AlertDialog
+import com.example.ui.components.ModernButton as Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
+import com.example.ui.components.ModernCard as Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
@@ -56,8 +58,8 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
+import com.example.ui.components.ModernOutlinedButton as OutlinedButton
+import com.example.ui.components.ModernTextField as OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -796,114 +798,29 @@ private fun CardListItem(
     highlighted: Boolean = false,
     dragHandleModifier: Modifier = Modifier
 ) {
-    Card(
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isSelected || highlighted) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f)
-            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        ),
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(enabled = isMultiSelectMode, onClick = onToggleSelect)
-    ) {
-        Column(
-            modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth()
-        ) {
-            Row(verticalAlignment = Alignment.Top) {
-                if (isMultiSelectMode) {
-                    Checkbox(
-                        checked = isSelected,
-                        onCheckedChange = { onToggleSelect() },
-                        modifier = Modifier.padding(end = 8.dp)
-                    )
+    var menu by remember { mutableStateOf(false) }
+    Surface(shape = RoundedCornerShape(20.dp), color = if (isSelected || highlighted) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxWidth().clickable(enabled = isMultiSelectMode, onClick = onToggleSelect)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (isMultiSelectMode) Checkbox(checked = isSelected, onCheckedChange = { onToggleSelect() })
+                Column(Modifier.weight(1f)) {
+                    Text(card.word, style = MaterialTheme.typography.titleLarge)
+                    Text(listOf(card.partOfSpeech, card.phonetic).filter(String::isNotBlank).joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = card.word,
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    if (card.partOfSpeech.isNotBlank()) {
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Surface(
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text(
-                                text = card.partOfSpeech,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
+                if (showReorder) Icon(Icons.Default.DragHandle, "拖曳調整單字順序", dragHandleModifier.size(32.dp))
+                IconButton(onClick = onSpeak) { Icon(Icons.AutoMirrored.Filled.VolumeUp, "發音") }
+                Box {
+                    IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, "單字操作") }
+                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                        DropdownMenuItem(text = { Text(if (card.isFavorite) "取消收藏" else "加入收藏") }, onClick = { menu = false; onToggleFavorite() })
+                        DropdownMenuItem(text = { Text("編輯") }, onClick = { menu = false; onEditCard() })
+                        DropdownMenuItem(text = { Text("發音練習") }, onClick = { menu = false; onPracticePronunciation() })
+                        DropdownMenuItem(text = { Text("刪除", color = MaterialTheme.colorScheme.error) }, onClick = { menu = false; onDeleteCard() })
                     }
                 }
-
-                if (card.phonetic.isNotBlank()) {
-                    Text(
-                        text = card.phonetic,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.outline,
-                        modifier = Modifier.padding(top = 3.dp)
-                    )
-                }
-
-                Text(
-                    text = OcrWordParser.cleanDefinition(card.definition),
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 6.dp)
-                )
-
-                if (card.exampleSentence.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "例: ${card.exampleSentence}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.outline,
-                        maxLines = 1
-                    )
-                }
             }
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (showReorder) {
-                    IconButton(
-                        onClick = {},
-                        modifier = dragHandleModifier.size(48.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.DragHandle,
-                            contentDescription = "拖曳調整單字順序",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-                IconButton(onClick = onSpeak) {
-                    Icon(imageVector = Icons.AutoMirrored.Filled.VolumeUp, contentDescription = "發音", tint = MaterialTheme.colorScheme.primary)
-                }
-                IconButton(onClick = onToggleFavorite) {
-                    Icon(
-                        imageVector = if (card.isFavorite) Icons.Filled.Star else Icons.Outlined.StarBorder,
-                        contentDescription = if (card.isFavorite) "取消收藏" else "加入收藏",
-                        tint = if (card.isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
-                    )
-                }
-                IconButton(onClick = onEditCard) {
-                    Icon(imageVector = Icons.Filled.Edit, contentDescription = "編輯", tint = MaterialTheme.colorScheme.secondary)
-                }
-                IconButton(onClick = onDeleteCard) {
-                    Icon(imageVector = Icons.Filled.Delete, contentDescription = "刪除", tint = MaterialTheme.colorScheme.error)
-                }
-            }
+            Text(OcrWordParser.cleanDefinition(card.definition), style = MaterialTheme.typography.bodyLarge)
+            if (card.exampleSentence.isNotBlank()) Text(card.exampleSentence, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
     }
 }

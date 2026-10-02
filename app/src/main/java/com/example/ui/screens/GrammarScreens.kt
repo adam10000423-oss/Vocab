@@ -1,4 +1,15 @@
 package com.example.ui.screens
+import com.example.ui.components.ModernButton as Button
+import com.example.ui.components.ModernOutlinedButton as OutlinedButton
+import com.example.ui.components.ModernTonalButton as FilledTonalButton
+import com.example.ui.components.ModernChoiceRow
+import com.example.ui.components.ModernTabRow as TabRow
+import com.example.ui.components.ModernCard as Card
+import com.example.ui.components.ModernListRow
+import com.example.ui.components.CalmSectionHeader
+import com.example.ui.components.CalmEmptyState
+import com.example.ui.components.ModernTextField as OutlinedTextField
+import com.example.ui.components.ModernAlertDialog as AlertDialog
 
 import android.app.Activity
 import android.content.Context
@@ -86,87 +97,31 @@ fun GrammarDashboardScreen(
     val due = notes.filter { it.nextReviewAt <= now }
     val recentNotes = remember(notes) { notes.sortedByDescending { it.updatedAt }.take(4) }
 
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, top = 12.dp, end = 16.dp, bottom = 120.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        // Hero Progress Card
+    LazyColumn(modifier = modifier.fillMaxSize(), contentPadding = PaddingValues(18.dp, 16.dp, 18.dp, 120.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item {
-            Card(
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text("今日文法複習", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                            Text("待複習 ${due.size} 個文法", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                        }
-                        Text("共 ${notes.size} 篇筆記", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f))
-                    }
+            Text("讓句型變成直覺", style = MaterialTheme.typography.headlineSmall)
+            Text("從理解到應用，一次掌握一個文法。", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        item {
+            Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surface) {
+                Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("今日文法", style = MaterialTheme.typography.titleMedium)
+                    Text("${due.size} 個待複習", style = MaterialTheme.typography.headlineLarge)
+                    Text("共 ${notes.size} 篇筆記", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Button(enabled = notes.isNotEmpty(), onClick = { (due.firstOrNull() ?: notes.firstOrNull())?.let(onLearn) }, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth().height(50.dp)) { Text("開始複習") }
                 }
             }
         }
-
         item {
-            Button(
-                enabled = notes.isNotEmpty(),
-                onClick = { (due.firstOrNull() ?: notes.firstOrNull())?.let(onLearn) },
-                shape = RoundedCornerShape(20.dp),
-                modifier = Modifier.fillMaxWidth().height(54.dp)
-            ) {
-                Icon(Icons.Default.PlayArrow, contentDescription = null)
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    if (due.isNotEmpty()) "開始複習（${due.size}）" else "開始文法學習",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                FilledTonalButton(onClick = onAdd, shape = RoundedCornerShape(16.dp), modifier = Modifier.weight(1f).height(50.dp)) { Icon(Icons.Default.Add, null); Spacer(Modifier.width(6.dp)); Text("新增文法") }
+                FilledTonalButton(onClick = onImport, shape = RoundedCornerShape(16.dp), modifier = Modifier.weight(1f).height(50.dp)) { Icon(Icons.Default.DocumentScanner, null); Spacer(Modifier.width(6.dp)); Text("匯入教材") }
             }
         }
-
-        // Keep the same calm two-column action layout used by the word dashboard.
-        item {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                FilledTonalButton(onClick = onAdd, shape = RoundedCornerShape(18.dp), modifier = Modifier.weight(1f).height(54.dp)) { Icon(Icons.Default.Add, null); Spacer(Modifier.width(5.dp)); Text("新增文法") }
-                FilledTonalButton(onClick = onImport, shape = RoundedCornerShape(18.dp), modifier = Modifier.weight(1f).height(54.dp)) { Icon(Icons.Default.DocumentScanner, null); Spacer(Modifier.width(5.dp)); Text("匯入") }
-            }
-        }
-
-        // Recent Notes Header & List Preview
-        item {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("最近研讀筆記", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                TextButton(onClick = onSeeAllNotes) {
-                    Text("查看全部 (${notes.size}) 篇 ➔")
-                }
-            }
-        }
-
-        if (recentNotes.isEmpty()) {
-            item {
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                    Column(
-                        Modifier.fillMaxWidth().padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Icon(Icons.Default.Book, null, tint = MaterialTheme.colorScheme.primary)
-                        Text("尚未建立任何文法筆記", fontWeight = FontWeight.Bold)
-                        Text("點擊「新增文法」或上傳教材照片，AI 會為您自動整理筆記與練習題。", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Button(onClick = onAdd) { Text("建立第一篇文法筆記") }
-                    }
-                }
-            }
-        } else {
-            items(recentNotes, key = { it.id }) { note ->
-                GrammarNoteCard(note = note, now = now, onOpen = onOpen)
-            }
+        item { CalmSectionHeader("最近研讀", action = { TextButton(onClick = onSeeAllNotes) { Text("查看全部") } }) }
+        if (recentNotes.isEmpty()) item { CalmEmptyState(Icons.Default.MenuBook, "建立第一篇文法筆記", "新增句型或匯入教材，整理出例句與練習題。", action = { TextButton(onClick = onAdd) { Text("新增文法") } }) }
+        items(recentNotes, key = { it.id }) { note ->
+            ModernListRow(note.title, "${note.course} · ${note.masteryPercent}% 精通", Icons.Default.MenuBook, { onOpen(note) })
         }
     }
 }
@@ -855,7 +810,7 @@ fun GrammarQuizScreen(note: GrammarNote, questions: List<GrammarQuestion>, onAns
                 LinearProgressIndicator(progress = { (index + 1f) / queue.size.coerceAtLeast(1) }, modifier = Modifier.fillMaxWidth())
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer), modifier = Modifier.fillMaxWidth()) { Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) { Text(q.prompt.replace("{{answer}}", "____"), style = MaterialTheme.typography.headlineSmall); if (q.translation.isNotBlank()) Text(q.translation, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
                 if (choices.isNotEmpty()) choices.forEach { choice ->
-                    FilterChip(selected = selected == choice, enabled = !checked, onClick = { selected = choice }, label = { Text(choice, style = MaterialTheme.typography.titleMedium) }, modifier = Modifier.fillMaxWidth().heightIn(min = 58.dp))
+                    ModernChoiceRow(text = choice, selected = selected == choice, enabled = !checked, onClick = { selected = choice }, label = ('A' + choices.indexOf(choice)).toString())
                 } else OutlinedTextField(input, { input = it }, enabled = !checked, label = { Text("輸入完整答案") }, textStyle = MaterialTheme.typography.titleMedium, singleLine = true, modifier = Modifier.fillMaxWidth())
                 if (checked) Card(colors = CardDefaults.cardColors(containerColor = if (correct) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer)) { Column(Modifier.fillMaxWidth().padding(16.dp)) { Text(if (correct) "答對了" else "答錯了", fontWeight = FontWeight.Bold); if (!correct) Text("正確答案：${q.answer}"); if (q.explanation.isNotBlank()) Text(q.explanation) } }
                 Button(enabled = response.isNotBlank(), onClick = { if (!checked) { correct = response.trim().lowercase() in accepted; checked = true; onAnswer(correct, false); if (!correct && wrong.none { it.id == q.id }) wrong.add(q) } else if (!correct) clear() else if (index < queue.lastIndex) { index++; clear() } else if (wrong.isNotEmpty()) { queue = wrong.toList(); wrong.clear(); index = 0; round++; clear() } else completed = true }, modifier = Modifier.fillMaxWidth()) { Text(if (!checked) "確認答案" else if (!correct) "再答一次" else if (index == queue.lastIndex && wrong.isEmpty()) "完成" else "下一題") }
@@ -1021,6 +976,17 @@ fun GrammarWritingCheckScreen(
                 }
             }
             item {
+                Text("你的作文", style = MaterialTheme.typography.headlineSmall)
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(recordTitle, { recordTitle = it }, label = { Text("作文標題") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                Spacer(Modifier.height(12.dp))
+                ExposedDropdownMenuBox(expanded = courseMenu, onExpandedChange = { courseMenu = it }) {
+                    OutlinedTextField(recordCourse, {}, readOnly = true, label = { Text("課程") }, singleLine = true, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(courseMenu) }, modifier = Modifier.menuAnchor().fillMaxWidth())
+                    ExposedDropdownMenu(expanded = courseMenu, onDismissRequest = { courseMenu = false }) {
+                        (listOf("通用") + courses).distinct().forEach { name -> DropdownMenuItem(text = { Text(name) }, onClick = { recordCourse = name; courseMenu = false }) }
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
                 OutlinedTextField(
                     value = text, onValueChange = { text = it },
                     label = { Text(if (originalText.isBlank()) "英文作文" else "辨識文字（請先校對）") },

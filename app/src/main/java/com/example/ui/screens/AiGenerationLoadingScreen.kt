@@ -4,6 +4,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Surface
+import androidx.compose.material3.TextButton
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.CircularProgressIndicator
@@ -36,18 +43,15 @@ fun AiGenerationLoadingScreen(
             )
         }
     ) { padding ->
-        Column(
-            modifier = Modifier.fillMaxSize().padding(padding).padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            if (error == null) CircularProgressIndicator()
-            Text(
-                error ?: status ?: "AI 正在產生內容…",
-                modifier = Modifier.padding(top = 16.dp),
-                style = MaterialTheme.typography.bodyLarge,
-                color = if (error == null) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error
-            )
+        Box(Modifier.fillMaxSize().padding(padding).padding(18.dp), contentAlignment = Alignment.Center) {
+            Surface(Modifier.widthIn(max = 420.dp).fillMaxWidth(), shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surface) {
+                Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    if (error == null) CircularProgressIndicator(Modifier.size(32.dp), strokeWidth = 3.dp)
+                    Text(if (error == null) "正在整理內容" else "未能完成", style = MaterialTheme.typography.titleLarge)
+                    Text(error ?: status ?: "AI 正在產生內容…", style = MaterialTheme.typography.bodyMedium, color = if (error == null) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error)
+                    if (error != null) TextButton(onClick = onBack) { Text("返回修改") }
+                }
+            }
         }
     }
 }
